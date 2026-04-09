@@ -1,0 +1,94 @@
+Act as an expert Full-Stack Developer and build a web application for the “Smart Shuttle Solution” as part of the “42 Irbid Hackathon”.
+
+The system must solve the shuttle problem for 42 Irbid by allowing students to reserve rides for the next day, and only confirm trips when there is enough demand so the van does not run empty.
+
+## Core Requirements
+
+Build a complete booking system with the following features:
+
+* Authentication system with roles: Student, Admin, and Driver.
+* Student booking page to reserve a ride for tomorrow.
+* Time slot selection from available shuttle times.
+* Pickup point selection from predefined locations only.
+* Booking status visibility: pending / confirmed / canceled.
+* Auto-confirmation when enough students book the same trip.
+* Seat counter showing remaining available seats in real time.
+* Cancel booking feature for students.
+* Admin page to view all bookings.
+* Booking history for students.
+* Fully mobile-responsive design.
+
+## Pickup Points Rule
+
+Use these predefined pickup locations:
+
+*Al-Shamali Complex
+*Sheikh Khalil Complex
+*Amman Complex
+
+Students may choose only one of these predefined locations.
+Also, if a student is located on the bus route and the shuttle passes near their area, they can request pickup only if the request follows the same trip rules, same booking flow, and the pickup point is valid according to the route and timing constraints.
+
+## Bonus Features
+
+Implement exactly these bonus features:
+
+* Interactive Map using Leaflet.js to display the route and pickup points.
+* Notifications to alert students when a trip becomes confirmed.
+
+## Design Requirements
+
+Apply the 42 School visual identity:
+
+* Dark-mode terminal style.
+* Backgrounds: deep black or very dark grey.
+* Text and accents: terminal green (#00FF00), cyan, and white.
+* Monospace fonts only.
+* Sharp rectangular borders, no border-radius.
+* Minimalist, code-like aesthetic.
+
+## Mobile First Requirements
+
+The entire application must be designed mobile-first and work perfectly on iOS and Android:
+
+* Touch-friendly buttons and inputs.
+* Responsive grids and tables.
+* No layout breaking on small screens.
+* Driver and student interfaces must remain clean and readable on mobile.
+
+## Admin and Driver Views
+
+Admin dashboard:
+
+* View all bookings.
+* See trip demand.
+* Monitor confirmed and pending trips.
+
+Driver dashboard:
+
+* Simple, mobile-friendly, high-contrast interface.
+* Show upcoming confirmed pickup points.
+* Show passenger count for each stop.
+* Maintain the same 42 terminal theme but with larger typography for safe quick glancing.
+
+## Suggested Technical Direction
+
+Use a modern full-stack architecture with:
+
+* Frontend: React / Next.js
+* Backend: Node.js with Express or NestJS
+* Database: PostgreSQL
+* Realtime updates: WebSockets / Socket.IO
+* Geolocation and map rendering: Leaflet.js
+* Authentication: JWT or session-based auth
+* Notifications: Web Push or in-app realtime notifications
+
+## Deliverables
+
+Provide:
+
+1. A clean architecture overview.
+2. A recommended tech stack.
+3. Initial frontend and backend code structure.
+4. A scalable approach for realtime booking, seat updates, and map-based pickup validation.
+5. A mobile-first UI structure consistent with the 42 School style.

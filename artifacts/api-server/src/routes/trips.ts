@@ -1,0 +1,210 @@
+import { Router, type IRouter } from "express";
+import { db, tripsTable, bookingsTable, pickupPointsTable, notificationsTable, usersTable } from "@workspace/db";
+import { eq, and, sql } from "drizzle-orm";
+import { requireAuth, requireRole } from "../lib/auth";
+import { GetTripsQueryParams, ConfirmTripParams, CancelTripParams } from "@workspace/api-zod";
+
+const router: IRouter = Router();
+
+function formatTrip(trip: typeof tripsTable.$inferSelect) {
+  return {
+    id: trip.id,
+    date: trip.date,
+    departureTime: trip.departureTime,
+    status: trip.status,
+    totalSeats: trip.totalSeats,
+    bookedSeats: trip.bookedSeats,
+    availableSeats: trip.totalSeats - trip.bookedSeats,
+    minBookingsToConfirm: trip.minBookingsToConfirm,
+    direction: trip.direction,
+    createdAt: trip.createdAt.toISOString(),
+  };
+}
+
+router.get("/trips", requireAuth, async (req, res): Promise<void> => {
+  const parsed = GetTripsQueryParams.safeParse(req.query);
+  const date = parsed.success && parsed.data.date ? parsed.data.date : getTomorrow();
+
+  const trips = await db
+    .select()
+    .from(tripsTable)
+    .where(eq(tripsTable.date, date));
+
+  res.json(trips.map(formatTrip));
+});
+
+router.get("/trips/:id", requireAuth, async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(raw, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid trip ID" });
+    return;
+  }
+
+  const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, id));
+  if (!trip) {
+    res.status(404).json({ error: "Trip not found" });
+    return;
+  }
+
+  res.json(formatTrip(trip));
+});
+
+router.post("/admin/trips/:id/confirm", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+  const params = ConfirmTripParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [trip] = await db
+    .update(tripsTable)
+    .set({ status: "confirmed" })
+    .where(eq(tripsTable.id, params.data.id))
+    .returning();
+
+  if (!trip) {
+    res.status(404).json({ error: "Trip not found" });
+    return;
+  }
+
+  // Confirm all pending bookings for this trip and notify students
+  const pendingBookings = await db
+    .select()
+    .from(bookingsTable)
+    .where(and(eq(bookingsTable.tripId, trip.id), eq(bookingsTable.status, "pending")));
+
+  if (pendingBookings.length > 0) {
+    await db
+      .update(bookingsTable)
+      .set({ status: "confirmed" })
+      .where(and(eq(bookingsTable.tripId, trip.id), eq(bookingsTable.status, "pending")));
+
+    for (const booking of pendingBookings) {
+      await db.insert(notificationsTable).values({
+        userId: booking.userId,
+        message: `Your shuttle booking for ${trip.date} at ${trip.departureTime} has been CONFIRMED. Be ready at your pickup point.`,
+        type: "trip_confirmed",
+        isRead: false,
+      });
+    }
+  }
+
+  res.json(formatTrip(trip));
+});
+
+router.post("/admin/trips/:id/cancel", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+  const params = CancelTripParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const [trip] = await db
+    .update(tripsTable)
+    .set({ status: "canceled" })
+    .where(eq(tripsTable.id, params.data.id))
+    .returning();
+
+  if (!trip) {
+    res.status(404).json({ error: "Trip not found" });
+    return;
+  }
+
+  // Cancel all pending/confirmed bookings and notify
+  const affectedBookings = await db
+    .select()
+    .from(bookingsTable)
+    .where(and(eq(bookingsTable.tripId, trip.id)));
+
+  if (affectedBookings.length > 0) {
+    await db
+      .update(bookingsTable)
+      .set({ status: "canceled" })
+      .where(eq(bookingsTable.tripId, trip.id));
+
+    // Revert seat counts
+    await db
+      .update(tripsTable)
+      .set({ bookedSeats: 0 })
+      .where(eq(tripsTable.id, trip.id));
+
+    for (const booking of affectedBookings) {
+      if (booking.status !== "canceled") {
+        await db.insert(notificationsTable).values({
+          userId: booking.userId,
+          message: `Your shuttle booking for ${trip.date} at ${trip.departureTime} has been CANCELED. Not enough demand.`,
+          type: "trip_canceled",
+          isRead: false,
+        });
+      }
+    }
+  }
+
+  res.json(formatTrip(trip));
+});
+
+router.get("/driver/trips", requireAuth, requireRole("driver", "admin"), async (req, res): Promise<void> => {
+  const today = new Date().toISOString().split("T")[0];
+  const trips = await db
+    .select()
+    .from(tripsTable)
+    .where(and(eq(tripsTable.status, "confirmed"), sql`${tripsTable.date} >= ${today}`));
+
+  const result = [];
+  for (const trip of trips) {
+    // Get pickup stops with passenger counts
+    const stops = await db
+      .select({
+        pickupPointId: bookingsTable.pickupPointId,
+        passengerCount: sql<number>`count(*)::int`,
+        pickupPointName: pickupPointsTable.name,
+        lat: pickupPointsTable.lat,
+        lng: pickupPointsTable.lng,
+        routeOrder: pickupPointsTable.routeOrder,
+      })
+      .from(bookingsTable)
+      .innerJoin(pickupPointsTable, eq(bookingsTable.pickupPointId, pickupPointsTable.id))
+      .where(and(eq(bookingsTable.tripId, trip.id), eq(bookingsTable.status, "confirmed")))
+      .groupBy(
+        bookingsTable.pickupPointId,
+        pickupPointsTable.name,
+        pickupPointsTable.lat,
+        pickupPointsTable.lng,
+        pickupPointsTable.routeOrder
+      );
+
+    const totalPassengers = stops.reduce((sum, s) => sum + s.passengerCount, 0);
+
+    result.push({
+      id: trip.id,
+      date: trip.date,
+      departureTime: trip.departureTime,
+      direction: trip.direction,
+      totalPassengers,
+      pickupStops: stops.map(s => ({
+        pickupPointId: s.pickupPointId,
+        pickupPointName: s.pickupPointName,
+        passengerCount: s.passengerCount,
+        lat: s.lat,
+        lng: s.lng,
+        routeOrder: s.routeOrder,
+      })),
+    });
+  }
+
+  res.json(result);
+});
+
+router.get("/pickup-points", requireAuth, async (_req, res): Promise<void> => {
+  const points = await db.select().from(pickupPointsTable).orderBy(pickupPointsTable.routeOrder);
+  res.json(points);
+});
+
+function getTomorrow(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().split("T")[0];
+}
+
+export default router;

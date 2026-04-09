@@ -3,13 +3,24 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Smart Shuttle Solution API for 42 Irbid Hackathon
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication operations
+  - name: bookings
+    description: Booking operations
+  - name: trips
+    description: Trip and time slot operations
+  - name: users
+    description: User operations
+  - name: stats
+    description: Statistics and dashboard data
+
 paths:
   /healthz:
     get:
@@ -24,6 +35,410 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterBody"
+      responses:
+        "201":
+          description: Registration successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid input or email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout user
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /trips:
+    get:
+      operationId: getTrips
+      tags: [trips]
+      summary: Get available trips for tomorrow
+      parameters:
+        - name: date
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of trips
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trip"
+
+  /trips/{id}:
+    get:
+      operationId: getTrip
+      tags: [trips]
+      summary: Get a single trip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Trip details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trip"
+        "404":
+          description: Trip not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bookings:
+    get:
+      operationId: getBookings
+      tags: [bookings]
+      summary: Get bookings (student sees own, admin sees all)
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, confirmed, canceled]
+        - name: date
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Booking"
+
+    post:
+      operationId: createBooking
+      tags: [bookings]
+      summary: Create a new booking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBookingBody"
+      responses:
+        "201":
+          description: Booking created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "400":
+          description: Invalid booking request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bookings/{id}:
+    get:
+      operationId: getBooking
+      tags: [bookings]
+      summary: Get a single booking
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Booking details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "404":
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      operationId: cancelBooking
+      tags: [bookings]
+      summary: Cancel a booking
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Booking canceled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "404":
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bookings/history:
+    get:
+      operationId: getBookingHistory
+      tags: [bookings]
+      summary: Get student's booking history
+      responses:
+        "200":
+          description: Booking history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Booking"
+
+  /admin/bookings:
+    get:
+      operationId: getAdminBookings
+      tags: [bookings]
+      summary: Get all bookings (admin only)
+      parameters:
+        - name: date
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: tripId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: All bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Booking"
+
+  /admin/trips/{id}/confirm:
+    post:
+      operationId: confirmTrip
+      tags: [trips]
+      summary: Manually confirm a trip (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Trip confirmed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trip"
+
+  /admin/trips/{id}/cancel:
+    post:
+      operationId: cancelTrip
+      tags: [trips]
+      summary: Cancel a trip (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Trip canceled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trip"
+
+  /driver/trips:
+    get:
+      operationId: getDriverTrips
+      tags: [trips]
+      summary: Get driver's upcoming confirmed trips
+      responses:
+        "200":
+          description: Driver's trips
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DriverTrip"
+
+  /stats/dashboard:
+    get:
+      operationId: getDashboardStats
+      tags: [stats]
+      summary: Get dashboard statistics
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /stats/demand:
+    get:
+      operationId: getTripDemand
+      tags: [stats]
+      summary: Get trip demand summary
+      parameters:
+        - name: date
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Trip demand data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TripDemand"
+
+  /pickup-points:
+    get:
+      operationId: getPickupPoints
+      tags: [trips]
+      summary: Get available pickup points
+      responses:
+        "200":
+          description: List of pickup points
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PickupPoint"
+
+  /notifications:
+    get:
+      operationId: getNotifications
+      tags: [users]
+      summary: Get user notifications
+      responses:
+        "200":
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+
+  /notifications/{id}/read:
+    post:
+      operationId: markNotificationRead
+      tags: [users]
+      summary: Mark notification as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +449,304 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+      required:
+        - success
+
+    LoginBody:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    RegisterBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [student, admin, driver]
+          default: student
+      required:
+        - name
+        - email
+        - password
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+      required:
+        - user
+        - token
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [student, admin, driver]
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - email
+        - role
+        - createdAt
+
+    PickupPoint:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+        routeOrder:
+          type: integer
+      required:
+        - id
+        - name
+        - lat
+        - lng
+        - routeOrder
+
+    Trip:
+      type: object
+      properties:
+        id:
+          type: integer
+        date:
+          type: string
+        departureTime:
+          type: string
+        status:
+          type: string
+          enum: [pending, confirmed, canceled]
+        totalSeats:
+          type: integer
+        bookedSeats:
+          type: integer
+        availableSeats:
+          type: integer
+        minBookingsToConfirm:
+          type: integer
+        direction:
+          type: string
+          enum: [to_school, from_school]
+        createdAt:
+          type: string
+      required:
+        - id
+        - date
+        - departureTime
+        - status
+        - totalSeats
+        - bookedSeats
+        - availableSeats
+        - minBookingsToConfirm
+        - direction
+        - createdAt
+
+    Booking:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        tripId:
+          type: integer
+        pickupPointId:
+          type: integer
+        status:
+          type: string
+          enum: [pending, confirmed, canceled]
+        createdAt:
+          type: string
+        trip:
+          $ref: "#/components/schemas/Trip"
+        pickupPoint:
+          $ref: "#/components/schemas/PickupPoint"
+        user:
+          $ref: "#/components/schemas/User"
+      required:
+        - id
+        - userId
+        - tripId
+        - pickupPointId
+        - status
+        - createdAt
+
+    CreateBookingBody:
+      type: object
+      properties:
+        tripId:
+          type: integer
+        pickupPointId:
+          type: integer
+      required:
+        - tripId
+        - pickupPointId
+
+    DriverTrip:
+      type: object
+      properties:
+        id:
+          type: integer
+        date:
+          type: string
+        departureTime:
+          type: string
+        direction:
+          type: string
+          enum: [to_school, from_school]
+        totalPassengers:
+          type: integer
+        pickupStops:
+          type: array
+          items:
+            $ref: "#/components/schemas/PickupStop"
+      required:
+        - id
+        - date
+        - departureTime
+        - direction
+        - totalPassengers
+        - pickupStops
+
+    PickupStop:
+      type: object
+      properties:
+        pickupPointId:
+          type: integer
+        pickupPointName:
+          type: string
+        passengerCount:
+          type: integer
+        lat:
+          type: number
+        lng:
+          type: number
+        routeOrder:
+          type: integer
+      required:
+        - pickupPointId
+        - pickupPointName
+        - passengerCount
+        - lat
+        - lng
+        - routeOrder
+
+    DashboardStats:
+      type: object
+      properties:
+        totalBookingsToday:
+          type: integer
+        confirmedTripsToday:
+          type: integer
+        pendingTripsToday:
+          type: integer
+        totalStudents:
+          type: integer
+        totalTripsThisWeek:
+          type: integer
+        averageOccupancyRate:
+          type: number
+      required:
+        - totalBookingsToday
+        - confirmedTripsToday
+        - pendingTripsToday
+        - totalStudents
+        - totalTripsThisWeek
+        - averageOccupancyRate
+
+    TripDemand:
+      type: object
+      properties:
+        tripId:
+          type: integer
+        departureTime:
+          type: string
+        direction:
+          type: string
+        bookingCount:
+          type: integer
+        confirmedCount:
+          type: integer
+        pendingCount:
+          type: integer
+        availableSeats:
+          type: integer
+        status:
+          type: string
+      required:
+        - tripId
+        - departureTime
+        - direction
+        - bookingCount
+        - confirmedCount
+        - pendingCount
+        - availableSeats
+        - status
+
+    Notification:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        message:
+          type: string
+        type:
+          type: string
+          enum: [trip_confirmed, trip_canceled, booking_confirmed, booking_canceled, general]
+        isRead:
+          type: boolean
+        createdAt:
+          type: string
+      required:
+        - id
+        - userId
+        - message
+        - type
+        - isRead
+        - createdAt
