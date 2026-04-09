@@ -1,0 +1,138 @@
+Act as an expert Full-Stack Developer and UI/UX Designer. Build a complete web application for the “Smart Shuttle Solution” for the “42 Irbid Hackathon”.
+
+GOAL
+Create a smart booking system where students reserve rides for tomorrow, trips only run when there is enough demand, and both students and drivers can track the trip status in real time.
+
+PROJECT REQUIREMENTS
+The application must include:
+- Authentication with roles: Student, Admin, Driver
+- Student booking page to reserve a ride for tomorrow
+- Time slot selection from available trip times
+- Pickup point selection from predefined locations only
+- Booking status: pending, confirmed, canceled
+- Auto-confirmation when enough students book the same trip
+- Seat counter with live updates
+- Cancel booking feature for students
+- Student booking history
+- Admin panel to view all bookings
+- Driver dashboard with upcoming pickups and passenger counts
+- Interactive map with route tracking
+- ETA logic for pickup locations
+- Real-time updates without refresh
+- Mobile-first responsive design
+
+PICKUP POINTS
+Use these predefined pickup points:
+- Northern Bus Terminal
+- Sheikh Khalil Bus Terminal
+- Amman Bus Terminal
+
+Students may select only one of these locations. Also, if a student is on or very near the bus route, allow the pickup only when it follows the same booking rules, the point is valid on the route, and the request passes route validation and timing checks.
+
+BONUS FEATURES
+Implement these bonus features:
+- Interactive Map using Leaflet.js
+- Notifications when a trip becomes confirmed or when the bus is approaching a pickup point
+
+DESIGN DIRECTION
+Completely overhaul the visual identity to match the modern “42 Intranet V2” aesthetic.
+
+The UI must feel like a premium modern cyber-academy:
+- Backgrounds: deep space navy / dark slate blue, not pure black
+- Card surfaces: slightly lighter navy with low opacity
+- Borders: subtle thin borders, around 1px solid rgba(255,255,255,0.08)
+- Accents: neon pink / magenta and cyan / light blue
+- Text: pure white for headings, muted grey for secondary text
+- Typography: modern sans-serif for main UI such as Inter or Roboto
+- Use monospace only for technical data like time slots, IDs, and seat counts
+- Rounded corners: 8px to 12px on cards, inputs, and buttons
+- Icons: thin-line modern icons such as Lucide or Feather
+- Use glowing segment-style progress bars for seat counters, inspired by the 42 intranet progression bar
+- Use modern data tables with subtle hover effects
+- Add smooth transitions, soft glow effects, and a polished premium feel
+
+PALETTE
+Use this kind of palette in Tailwind:
+- Background: #0a0e17 to #121822
+- Card: rgba(255,255,255,0.04) or similar
+- Border: rgba(255,255,255,0.08)
+- Primary accent: #ff2e88
+- Secondary accent: #22d3ee
+- Text primary: #ffffff
+- Text secondary: #a7b0c0
+
+MOBILE-FIRST REQUIREMENTS
+The whole app must work perfectly on iOS and Android:
+- Start mobile-first
+- Large touch-friendly buttons and inputs
+- Sidebar should collapse into a drawer or bottom navigation on mobile
+- Cards should stack vertically on small screens
+- Tables should convert into compact card lists on mobile
+- The map should stay usable and full-width on mobile
+- Driver UI must be highly legible and safe to read quickly while driving
+
+CORE UI SECTIONS
+1. Authentication page
+2. Student dashboard
+   - My current bookings
+   - Tomorrow’s rides
+   - Booking status
+   - Seat availability
+3. Booking page
+   - Choose time slot
+   - Choose pickup point
+   - Confirm/cancel booking
+4. Driver dashboard
+   - Upcoming pickups
+   - Passenger count per stop
+   - Route overview
+5. Admin dashboard
+   - All bookings
+   - Trip demand
+   - Confirmed vs pending status
+   - Analytics and charts
+6. Map view
+   - Predefined route line
+   - Live bus location
+   - Pickup points
+   - ETA display
+   - Route validation for pickup selection
+
+TECH STACK
+Use a modern stack optimized for real-time booking and geolocation:
+- Frontend: Next.js + React
+- Styling: Tailwind CSS
+- Backend: Node.js with Express or NestJS
+- Database: PostgreSQL
+- Real-time: WebSockets / Socket.IO
+- Geolocation and maps: Leaflet.js
+- Authentication: JWT or secure session-based auth
+- Notifications: Web Push or in-app realtime notifications
+
+REAL-TIME AND GEOLOCATION LOGIC
+Design the system so that:
+- Seat counts update instantly
+- Booking confirmation updates instantly
+- Driver and admin dashboards update live
+- Bus location is updated in real time
+- Pickup points are validated against the predefined route
+- Off-route pickup requests are rejected with a clear error
+- ETA is calculated for each valid pickup point
+- A student must confirm a pickup request at least 15 minutes before the ETA for that stop
+- The system shows alerts when the bus is approaching a student’s location
+
+DELIVERABLES
+Provide:
+1. A detailed architecture overview
+2. The recommended tech stack
+3. The frontend folder and component structure
+4. The backend folder and API structure
+5. Example React components for the modern 42-style UI
+6. Tailwind CSS configuration for the navy / pink / cyan theme
+7. A scalable real-time websocket design
+8. A geolocation and route-validation approach
+9. A mobile-first layout strategy
+10. Sample code for booking flow, seat counter, route map, and role-based dashboards
+
+CODE STYLE
+Write production-ready code, clean architecture, and clear separation of concerns. Use reusable components, scalable data models, and maintainable folder structure. Keep the implementation practical for a hackathon but designed in a way that can grow into a full production app.

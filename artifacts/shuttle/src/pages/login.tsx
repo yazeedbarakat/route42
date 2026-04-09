@@ -3,14 +3,15 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useLogin, useRegister } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
+import { Bus, Mail, Lock, User, ChevronRight, Loader2 } from "lucide-react";
 
 type UserRole = "student" | "admin" | "driver";
 
 export default function Login() {
   const { user, setToken } = useAuth();
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
-  
+
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,124 +33,151 @@ export default function Login() {
     e.preventDefault();
     try {
       if (isRegistering) {
-        const res = await registerMutation.mutateAsync({
-          data: { email, password, name, role }
-        });
+        const res = await registerMutation.mutateAsync({ data: { email, password, name, role } });
         setToken(res.token);
-        toast({ title: "SYSTEM", description: "REGISTRATION_SUCCESSFUL" });
+        toast({ title: "Welcome!", description: "Account created successfully." });
       } else {
-        const res = await loginMutation.mutateAsync({
-          data: { email, password }
-        });
+        const res = await loginMutation.mutateAsync({ data: { email, password } });
         setToken(res.token);
-        toast({ title: "SYSTEM", description: "AUTHENTICATION_SUCCESSFUL" });
+        toast({ title: "Welcome back!", description: "Signed in successfully." });
       }
     } catch (err: any) {
-      toast({ 
-        title: "ERR_AUTH_FAILED", 
-        description: err?.message || "ACCESS_DENIED",
-        variant: "destructive"
-      });
+      toast({ title: "Authentication failed", description: err?.message || "Please check your credentials.", variant: "destructive" });
     }
   };
 
+  const isPending = loginMutation.isPending || registerMutation.isPending;
+
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
-        <div className="mb-8 text-center">
-          <pre className="text-primary text-xs sm:text-sm md:text-base leading-tight inline-block text-left">
-{`   _____ __  __   __    ____  ______ 
-  / ___// / / /  / /   / __ \\/ ____/ 
-  \\__ \\/ /_/ /  / /   / / / / / __   
- ___/ / __  /  / /___/ /_/ / /_/ /   
-/____/_/ /_/  /_____/\\____/\\____/    `}
-          </pre>
-          <div className="mt-4 text-xl tracking-widest font-bold">SMART SHUTTLE SOLUTION</div>
-          <div className="text-muted-foreground text-sm mt-2">v1.0.0_beta</div>
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background gradient blobs */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-[#ff2e88]/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-[#22d3ee]/10 rounded-full blur-3xl" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[#7c3aed]/5 rounded-full blur-3xl" />
+      </div>
+
+      <div className="w-full max-w-md relative z-10">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-[#ff2e88] to-[#7c3aed] mb-4 shadow-xl glow-pink">
+            <Bus size={28} className="text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-white mb-1">Smart Shuttle Solution</h1>
+          <p className="text-[#a7b0c0] text-sm">42 Irbid — Ride Booking Platform</p>
         </div>
 
-        <div className="border border-border bg-card p-6 shadow-xl relative">
-          <div className="absolute top-0 left-0 w-full h-1 bg-primary"></div>
-          
-          <h2 className="text-xl mb-6 flex items-center gap-2">
-            <span className="text-primary">{">"}</span> 
-            {isRegistering ? "INIT_NEW_USER" : "LOGIN_REQUIRED"}
-            <span className="blink">_</span>
+        {/* Card */}
+        <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 shadow-xl backdrop-blur-sm">
+          <h2 className="text-lg font-semibold text-white mb-1">
+            {isRegistering ? "Create an account" : "Sign in to continue"}
           </h2>
+          <p className="text-sm text-[#a7b0c0] mb-6">
+            {isRegistering ? "Fill in your details to get started" : "Enter your credentials to access your dashboard"}
+          </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {isRegistering && (
-              <div className="space-y-2">
-                <label className="text-sm text-muted-foreground">{"[NAME]"}</label>
-                <input 
-                  type="text" 
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-background border border-border p-2 focus:border-primary focus:outline-none transition-colors"
-                  placeholder="Enter full name"
-                />
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-[#a7b0c0]">Full Name</label>
+                <div className="relative">
+                  <User size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a7b0c0]" />
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg pl-9 pr-4 py-2.5 text-white placeholder-[#a7b0c0]/50 text-sm focus:outline-none focus:border-[#ff2e88]/60 focus:bg-white/[0.08] transition-all"
+                    placeholder="Your full name"
+                  />
+                </div>
               </div>
             )}
-            
-            <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">{"[EMAIL]"}</label>
-              <input 
-                type="email" 
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-background border border-border p-2 focus:border-primary focus:outline-none transition-colors"
-                placeholder="user@42irbid.edu"
-              />
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-[#a7b0c0]">Email</label>
+              <div className="relative">
+                <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a7b0c0]" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg pl-9 pr-4 py-2.5 text-white placeholder-[#a7b0c0]/50 text-sm focus:outline-none focus:border-[#ff2e88]/60 focus:bg-white/[0.08] transition-all"
+                  placeholder="you@42irbid.edu"
+                />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">{"[PASSWORD]"}</label>
-              <input 
-                type="password" 
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-background border border-border p-2 focus:border-primary focus:outline-none transition-colors"
-                placeholder="••••••••"
-              />
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-[#a7b0c0]">Password</label>
+              <div className="relative">
+                <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a7b0c0]" />
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg pl-9 pr-4 py-2.5 text-white placeholder-[#a7b0c0]/50 text-sm focus:outline-none focus:border-[#ff2e88]/60 focus:bg-white/[0.08] transition-all"
+                  placeholder="••••••••"
+                />
+              </div>
             </div>
 
             {isRegistering && (
-              <div className="space-y-2">
-                <label className="text-sm text-muted-foreground">{"[ROLE]"}</label>
-                <select 
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-[#a7b0c0]">Role</label>
+                <select
                   value={role}
                   onChange={(e) => setRole(e.target.value as UserRole)}
-                  className="w-full bg-background border border-border p-2 focus:border-primary focus:outline-none transition-colors text-foreground"
+                  className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-[#ff2e88]/60 focus:bg-white/[0.08] transition-all"
                 >
-                  <option value="student">STUDENT</option>
-                  <option value="admin">ADMIN</option>
-                  <option value="driver">DRIVER</option>
+                  <option value="student" className="bg-[#0f1420]">Student</option>
+                  <option value="driver" className="bg-[#0f1420]">Driver</option>
                 </select>
               </div>
             )}
 
-            <div className="pt-4">
-              <button 
-                type="submit" 
-                className="w-full bg-primary text-primary-foreground font-bold p-3 border border-primary hover:bg-transparent hover:text-primary transition-colors disabled:opacity-50"
-                disabled={loginMutation.isPending || registerMutation.isPending}
-              >
-                {isRegistering ? "EXECUTE_REGISTER" : "EXECUTE_LOGIN"}
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-[#ff2e88] to-[#e0176b] hover:from-[#ff4595] hover:to-[#ff2e88] text-white font-semibold py-2.5 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg mt-2"
+            >
+              {isPending ? (
+                <><Loader2 size={16} className="animate-spin" /> Processing...</>
+              ) : (
+                <>{isRegistering ? "Create Account" : "Sign In"}<ChevronRight size={16} /></>
+              )}
+            </button>
           </form>
 
-          <div className="mt-6 text-center text-sm">
-            <button 
+          <div className="mt-5 text-center">
+            <button
               type="button"
               onClick={() => setIsRegistering(!isRegistering)}
-              className="text-muted-foreground hover:text-primary underline-offset-4 hover:underline"
+              className="text-sm text-[#a7b0c0] hover:text-[#22d3ee] transition-colors"
             >
-              {isRegistering ? "SWITCH_TO_LOGIN" : "SWITCH_TO_REGISTER"}
+              {isRegistering ? "Already have an account? Sign in" : "Don't have an account? Sign up"}
             </button>
+          </div>
+        </div>
+
+        {/* Demo hints */}
+        <div className="mt-4 bg-white/[0.02] border border-white/[0.06] rounded-xl p-4">
+          <p className="text-xs text-[#a7b0c0] mb-2 font-medium">Demo credentials:</p>
+          <div className="space-y-1 font-mono text-xs">
+            <div className="flex justify-between">
+              <span className="text-[#ff2e88]">Admin</span>
+              <span className="text-white/50">admin@42irbid.com / admin123</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-emerald-400">Driver</span>
+              <span className="text-white/50">driver@42irbid.com / driver123</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[#22d3ee]">Student</span>
+              <span className="text-white/50">ali@42irbid.com / student123</span>
+            </div>
           </div>
         </div>
       </div>
