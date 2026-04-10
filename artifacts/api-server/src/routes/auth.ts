@@ -180,6 +180,59 @@ router.post(
   },
 );
 
+router.get(
+  "/auth/admin/drivers",
+  requireAuth,
+  requireRole("admin"),
+  async (_req, res): Promise<void> => {
+    const drivers = await db
+      .select({
+        id: usersTable.id,
+        name: usersTable.name,
+        email: usersTable.email,
+        phone: usersTable.phone,
+        driverId: usersTable.driverId,
+        createdAt: usersTable.createdAt,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.role, "driver"));
+
+    res.json(drivers.map(driver => ({
+      ...driver,
+      createdAt: driver.createdAt.toISOString(),
+    })));
+  },
+);
+
+router.delete(
+  "/auth/admin/drivers/:id",
+  requireAuth,
+  requireRole("admin"),
+  async (req, res): Promise<void> => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: "Invalid driver ID" });
+      return;
+    }
+
+    const [driver] = await db
+      .select()
+      .from(usersTable)
+      .where(and(eq(usersTable.id, id), eq(usersTable.role, "driver")));
+
+    if (!driver) {
+      res.status(404).json({ error: "Driver not found" });
+      return;
+    }
+
+    await db
+      .delete(usersTable)
+      .where(eq(usersTable.id, id));
+
+    res.json({ success: true });
+  },
+);
+
 router.post("/auth/logout", (_req, res): Promise<void> => {
   res.json({ success: true, message: "Logged out" });
   return Promise.resolve();

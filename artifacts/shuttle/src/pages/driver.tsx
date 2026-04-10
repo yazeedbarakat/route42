@@ -8,7 +8,7 @@ import {
   Truck, Users, MapPin, Clock, Moon, Map,
   CheckCircle2, XCircle, ChevronDown, ChevronUp,
   UserCheck, AlertTriangle, Navigation, RefreshCw,
-  Phone, Play, BarChart3, Zap, TrendingUp, CalendarDays,
+  Phone, Play, BarChart3, Zap, CalendarDays,
 } from "lucide-react";
 import { RouteMap, type CustomBooking, type DriverProgressInfo } from "@/components/route-map";
 
@@ -128,17 +128,6 @@ function DailyStats({ trips }: { trips: DriverTripToday[] }) {
   const active = trips.filter(t => t.status !== "canceled");
   const tripsWithPassengers = active.filter(t => t.passengers.length > 0);
   const totalPassengers = tripsWithPassengers.reduce((s, t) => s + t.passengers.length, 0);
-  const totalSeats = tripsWithPassengers.length * 15;
-  const efficiency = totalSeats > 0 ? Math.round((totalPassengers / totalSeats) * 100) : 0;
-
-  let peakTime = "—";
-  let peakCount = 0;
-  for (const t of tripsWithPassengers) {
-    if (t.passengers.length > peakCount) {
-      peakCount = t.passengers.length;
-      peakTime = t.departureTime;
-    }
-  }
 
   return (
     <div>
@@ -149,8 +138,6 @@ function DailyStats({ trips }: { trips: DriverTripToday[] }) {
       <div className="grid grid-cols-2 gap-3">
         <StatCard icon={Truck}       label="Total Trips"       value={tripsWithPassengers.length} sub="with bookings" color="#22d3ee" />
         <StatCard icon={Users}       label="Total Passengers"  value={totalPassengers}             sub="across all trips" color="#ff2e88" />
-        <StatCard icon={Clock}       label="Peak Time"         value={peakTime}                    sub={peakCount > 0 ? `${peakCount} passengers` : "no data"} color="#facc15" />
-        <StatCard icon={TrendingUp}  label="Efficiency"        value={`${efficiency}%`}            sub="seats filled" color="#34d399" />
       </div>
     </div>
   );

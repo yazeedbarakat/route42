@@ -3,8 +3,8 @@ import { useAuth } from "@/lib/auth";
 import { useGetNotifications } from "@workspace/api-client-react";
 import { 
   LayoutDashboard, CalendarPlus, History, Map, 
-  Settings, BookOpen, Truck, Bell, LogOut, 
-  ChevronRight, Menu, X
+  BookOpen, Truck, Bell, LogOut, 
+  ChevronRight, Menu, X, UsersRound
 } from "lucide-react";
 
 import { useState } from "react";
@@ -37,6 +37,7 @@ const NAV_LINKS = {
   admin: [
     { href: "/admin", label: "Overview", icon: LayoutDashboard },
     { href: "/admin/bookings", label: "All Bookings", icon: BookOpen },
+    { href: "/admin/drivers", label: "Driver Management", icon: UsersRound },
   ],
   driver: [
     { href: "/driver", label: "My Trips", icon: Truck },
@@ -154,7 +155,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {links.map(({ href, label, icon: Icon }) => {
-            const active = location === href || (href !== "/" && location.startsWith(href));
+            const active = href === "/admin"
+              ? location === href
+              : location === href || (href !== "/" && location.startsWith(`${href}/`));
             return (
               <Link key={href} href={href} onClick={() => setSidebarOpen(false)}>
                 <div className={`

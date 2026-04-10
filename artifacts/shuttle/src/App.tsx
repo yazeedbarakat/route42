@@ -13,6 +13,7 @@ import History from "@/pages/history";
 import MapPage from "@/pages/map";
 import AdminDashboard from "@/pages/admin-dashboard";
 import AdminBookings from "@/pages/admin-bookings";
+import AdminDriverManagement from "@/pages/admin-driver-management";
 import DriverDashboard from "@/pages/driver";
 import Notifications from "@/pages/notifications";
 
@@ -27,8 +28,9 @@ function Router() {
         <Route path="/book" component={Book} />
         <Route path="/history" component={History} />
         <Route path="/map" component={MapPage} />
-        <Route path="/admin" component={AdminDashboard} />
         <Route path="/admin/bookings" component={AdminBookings} />
+        <Route path="/admin/drivers" component={AdminDriverManagement} />
+        <Route path="/admin" component={AdminDashboard} />
         <Route path="/driver" component={DriverDashboard} />
         <Route path="/notifications" component={Notifications} />
         <Route component={NotFound} />

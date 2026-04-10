@@ -1,9 +1,9 @@
-import { useGetDashboardStats, useGetTripDemand, useConfirmTrip, useCancelTrip, useAddDriver } from "@workspace/api-client-react";
+import { useGetDashboardStats, useGetTripDemand, useConfirmTrip, useCancelTrip } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { useLocation, Link } from "wouter";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Users, CalendarCheck, Clock, TrendingUp, CheckCircle2, AlertCircle, XCircle, ArrowRight, Loader2, BarChart3, Shield, Map, UserPlus, Hash, Phone } from "lucide-react";
+import { Users, CalendarCheck, Clock, TrendingUp, CheckCircle2, AlertCircle, XCircle, ArrowRight, Loader2, BarChart3, Shield, Map } from "lucide-react";
 import { RouteMap, type CustomBooking } from "@/components/route-map";
 
 // Demo custom booking coordinates for admin visibility
@@ -71,12 +71,6 @@ export default function AdminDashboard() {
   const { toast } = useToast();
   const [showCustomMap, setShowCustomMap] = useState(false);
 
-  // ── Driver registration form state ──────────────────────────────────────────
-  const [showAddDriver, setShowAddDriver] = useState(false);
-  const [driverName, setDriverName]       = useState("");
-  const [driverPhone, setDriverPhone]     = useState("");
-  const [driverIdInput, setDriverIdInput] = useState("");
-
   useEffect(() => {
     if (!user) setLocation("/");
     else if (user.role !== "admin") setLocation(user.role === "student" ? "/dashboard" : "/driver");
@@ -86,26 +80,6 @@ export default function AdminDashboard() {
   const { data: demand, isLoading: demandLoading, refetch: refetchDemand } = useGetTripDemand();
   const confirmTrip = useConfirmTrip();
   const cancelTrip  = useCancelTrip();
-  const addDriver   = useAddDriver();
-
-  const handleAddDriver = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const res = await addDriver.mutateAsync({
-        data: { name: driverName, phone: driverPhone, driverId: driverIdInput },
-      });
-      toast({
-        title: "Driver registered",
-        description: `${res.driver.name} can now log in with Driver ID: ${res.driver.driverId}`,
-      });
-      // Reset form
-      setDriverName(""); setDriverPhone(""); setDriverIdInput("");
-      setShowAddDriver(false);
-    } catch (err: any) {
-      const msg = err?.data?.error ?? err?.message ?? "Failed to register driver.";
-      toast({ title: "Error", description: msg, variant: "destructive" });
-    }
-  };
 
   const handleConfirm = async (id: number) => {
     try {
@@ -130,6 +104,15 @@ export default function AdminDashboard() {
 
   if (!user) return null;
 
+  const tripsWithDemand = demand ?? [];
+  const peakTrip = tripsWithDemand.reduce<typeof tripsWithDemand[number] | null>(
+    (peak, trip) => (!peak || trip.bookingCount > peak.bookingCount ? trip : peak),
+    null
+  );
+  const totalBookedSeats = tripsWithDemand.reduce((sum, trip) => sum + trip.bookingCount, 0);
+  const totalSeats = tripsWithDemand.reduce((sum, trip) => sum + trip.bookingCount + trip.availableSeats, 0);
+  const efficiency = totalSeats > 0 ? Math.round((totalBookedSeats / totalSeats) * 100) : 0;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -150,13 +133,15 @@ export default function AdminDashboard() {
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Total Students"   value={stats?.totalStudents}             icon={Users}         color="cyan"    loading={statsLoading} />
         <StatCard label="Bookings Today"   value={stats?.totalBookingsToday}         icon={CalendarCheck} color="pink"    loading={statsLoading} />
         <StatCard label="Confirmed Trips"  value={stats?.confirmedTripsToday}        icon={CheckCircle2}  color="emerald" loading={statsLoading} />
         <StatCard label="Pending Trips"    value={stats?.pendingTripsToday}          icon={Clock}         color="amber"   loading={statsLoading} />
         <StatCard label="Trips This Week"  value={stats?.totalTripsThisWeek}         icon={BarChart3}     color="purple"  loading={statsLoading} />
         <StatCard label="Avg Occupancy"    value={stats?.averageOccupancyRate !== undefined ? `${stats.averageOccupancyRate}%` : undefined} icon={TrendingUp} color="blue" loading={statsLoading} />
+        <StatCard label="Peak Time"        value={peakTrip ? peakTrip.departureTime : "—"} icon={Clock} color="amber" loading={demandLoading} />
+        <StatCard label="Efficiency"       value={`${efficiency}%`} icon={TrendingUp} color="emerald" loading={demandLoading} />
       </div>
 
       {/* Trip demand table */}
@@ -251,105 +236,6 @@ export default function AdminDashboard() {
               })}
             </div>
           </>
-        )}
-      </div>
-
-      {/* ── Register Driver Panel ── */}
-      <div className="bg-white/[0.03] border border-[#7c3aed]/20 rounded-xl overflow-hidden">
-        <button
-          onClick={() => setShowAddDriver(v => !v)}
-          className="w-full px-5 py-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#7c3aed]/10 border border-[#7c3aed]/20 flex items-center justify-center">
-              <UserPlus size={16} className="text-[#7c3aed]" />
-            </div>
-            <div className="text-left">
-              <p className="font-semibold text-white text-sm">Register New Driver</p>
-              <p className="text-xs text-[#a7b0c0]">Create a driver account with a unique Driver ID</p>
-            </div>
-          </div>
-          <span className="text-[#a7b0c0] text-sm">{showAddDriver ? "▲" : "▼"}</span>
-        </button>
-
-        {showAddDriver && (
-          <form onSubmit={handleAddDriver} className="border-t border-white/[0.06] px-5 py-5 space-y-4">
-            <p className="text-xs text-[#a7b0c0] leading-relaxed">
-              Drivers created here can sign in using <strong className="text-white">only their Driver ID</strong> — no email or password is needed.
-            </p>
-
-            {/* Driver Name */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-[#a7b0c0]">Driver Name</label>
-              <div className="relative">
-                <Users size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a7b0c0]" />
-                <input
-                  type="text"
-                  required
-                  value={driverName}
-                  onChange={(e) => setDriverName(e.target.value)}
-                  className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg pl-9 pr-4 py-2.5 text-white placeholder-[#a7b0c0]/50 text-sm focus:outline-none focus:border-[#7c3aed]/60 focus:bg-white/[0.08] transition-all"
-                  placeholder="Full name"
-                />
-              </div>
-            </div>
-
-            {/* Driver Phone */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-[#a7b0c0]">Phone Number</label>
-              <div className="relative">
-                <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a7b0c0]" />
-                <input
-                  type="tel"
-                  required
-                  value={driverPhone}
-                  onChange={(e) => setDriverPhone(e.target.value)}
-                  className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg pl-9 pr-4 py-2.5 text-white placeholder-[#a7b0c0]/50 text-sm focus:outline-none focus:border-[#7c3aed]/60 focus:bg-white/[0.08] transition-all"
-                  placeholder="+962 7X XXX XXXX"
-                />
-              </div>
-            </div>
-
-            {/* Unique Driver ID */}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-[#a7b0c0]">Driver ID <span className="text-[#a7b0c0]/50 font-normal">(must be unique)</span></label>
-              <div className="relative">
-                <Hash size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a7b0c0]" />
-                <input
-                  type="text"
-                  required
-                  value={driverIdInput}
-                  onChange={(e) => setDriverIdInput(e.target.value)}
-                  className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg pl-9 pr-4 py-2.5 text-white placeholder-[#a7b0c0]/50 text-sm focus:outline-none focus:border-[#7c3aed]/60 focus:bg-white/[0.08] transition-all font-mono tracking-widest"
-                  placeholder="e.g. DRV-001"
-                />
-              </div>
-              <p className="text-[11px] text-[#a7b0c0]/70">
-                This ID will be shared with the driver so they can sign in.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3 pt-1">
-              <button
-                type="submit"
-                disabled={addDriver.isPending}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#7c3aed] hover:bg-[#6d28d9] text-white text-sm font-semibold transition-colors disabled:opacity-50"
-              >
-                {addDriver.isPending ? (
-                  <><Loader2 size={14} className="animate-spin" /> Creating...</>
-                ) : (
-                  <><UserPlus size={14} /> Register Driver</>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => { setShowAddDriver(false); setDriverName(""); setDriverPhone(""); setDriverIdInput(""); }}
-                className="text-sm text-[#a7b0c0] hover:text-white transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
         )}
       </div>
 

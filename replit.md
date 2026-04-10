@@ -56,6 +56,10 @@ When `bookedSeats >= minBookingsToConfirm` (default 5), trip status changes to "
 
 The Driver Dashboard `Start Trip` action opens `/map` with the selected trip id/date. The driver-only route view fetches that trip, resolves fixed pickup points plus custom pickup coordinates, and passes them to the shared Leaflet/OSRM `RouteMap` component for live driver navigation.
 
+## Admin Driver Management
+
+Admins can manage driver accounts at `/admin/drivers`. The page lists all drivers, registers new drivers with name/phone/Driver ID, and deletes driver accounts through admin-only API routes.
+
 ## Key Commands
 
 - `pnpm run typecheck` — full typecheck across all packages
