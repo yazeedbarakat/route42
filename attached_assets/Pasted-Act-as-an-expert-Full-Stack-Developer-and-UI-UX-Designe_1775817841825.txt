@@ -1,0 +1,25 @@
+Act as an expert Full-Stack Developer and UI/UX Designer. I need to refactor the Booking Form UI in my "Smart Shuttle Solution" project. 
+
+**Goal:**
+Streamline the booking steps by introducing a Trip Direction toggle (Go to 42 vs. Return from 42), defining specific time slots for each, and removing the redundant pickup dropdown, forcing users to interact directly with the map.
+
+**Step 1: Refactor "Select Departure Time" (Step 1 in UI)**
+* Replace the current time selection with a two-part step:
+  1. **Trip Direction Toggle:** Add a sleek toggle or two buttons to select either "Go to 42 Irbid" (Inbound) or "Return from 42 Irbid" (Outbound).
+  2. **Dynamic Time Slots:** Based on the selected direction, display the following fixed time slots as clickable chips/buttons:
+     * If "Go to 42 Irbid" is selected: `08:00 AM`, `10:00 AM`, `12:00 PM`, `02:00 PM`, `04:00 PM`, `06:00 PM`.
+     * If "Return from 42 Irbid" is selected: `01:00 PM`, `03:00 PM`, `05:00 PM`, `07:00 PM`.
+
+**Step 2: Remove the Redundant "Select Pickup Point" Block (Old Step 2)**
+* Completely REMOVE the intermediate UI container that contains the "Select Pickup Point" dropdown and the "Custom Location" button. We no longer need this intermediate step.
+
+**Step 3: Keep the Map Section Untouched (New Step 2)**
+* The "Select Pickup on Map" section (which contains the instruction text and the actual `InteractiveMap` component) now becomes the logical Step 2.
+* **CRITICAL INSTRUCTION:** Do NOT modify the `InteractiveMap.jsx` component itself. The map logic, OSRM routing, and marker placement must remain exactly as they are. Just ensure the booking form captures the `customCoords` state from the map as it currently does.
+
+**Step 4: State & Submission**
+* Update the React state in the booking page to track `tripDirection`, `selectedTime`, and `coordinates`.
+* Ensure the form submission payload sends these updated fields correctly.
+* Maintain the "42 Intranet V2" dark navy theme, pink/cyan accents, and rounded corners for the new direction toggles and time slot chips.
+
+Please provide the updated code for the Booking Page/Form component.

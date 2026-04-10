@@ -4,8 +4,18 @@ import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { format, addDays } from "date-fns";
-import { Clock, MapPin, Users, CheckCircle2, ChevronRight, Loader2, CalendarDays, Info, Navigation } from "lucide-react";
+import {
+  Clock, CheckCircle2, ChevronRight, Loader2,
+  CalendarDays, Info, Navigation, ArrowRight, ArrowLeft, Users,
+} from "lucide-react";
 import { RouteMap } from "@/components/route-map";
+
+type Direction = "inbound" | "outbound";
+
+const TIME_SLOTS: Record<Direction, string[]> = {
+  inbound:  ["08:00 AM", "10:00 AM", "12:00 PM", "02:00 PM", "04:00 PM", "06:00 PM"],
+  outbound: ["01:00 PM", "03:00 PM", "05:00 PM", "07:00 PM"],
+};
 
 function SegmentBar({ booked, total, min }: { booked: number; total: number; min: number }) {
   const segments = Math.min(total, 20);
@@ -32,8 +42,6 @@ function SegmentBar({ booked, total, min }: { booked: number; total: number; min
   );
 }
 
-const CUSTOM_PICKUP_ID = -1; // sentinel value — not a real pickup point ID
-
 export default function Book() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
@@ -46,53 +54,59 @@ export default function Book() {
 
   const tomorrow = format(addDays(new Date(), 1), "yyyy-MM-dd");
   const { data: trips, isLoading: tripsLoading } = useGetTrips({ date: tomorrow });
-  const { data: pickupPoints, isLoading: pointsLoading } = useGetPickupPoints();
+  const { data: pickupPoints } = useGetPickupPoints();
   const createBooking = useCreateBooking();
 
-  const [selectedTrip, setSelectedTrip]     = useState<number | null>(null);
-  const [selectedPoint, setSelectedPoint]   = useState<number | null>(null);
-  const [customCoords, setCustomCoords]     = useState<[number, number] | null>(null);
+  const [direction, setDirection]       = useState<Direction>("inbound");
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [customCoords, setCustomCoords] = useState<[number, number] | null>(null);
 
-  const isCustomMode = selectedPoint === CUSTOM_PICKUP_ID;
-  const canBook = selectedTrip !== null && (
-    isCustomMode ? customCoords !== null : selectedPoint !== null
-  );
+  const handleDirectionChange = (dir: Direction) => {
+    setDirection(dir);
+    setSelectedTime(null);
+  };
 
   const handleLocationSelect = useCallback((coords: [number, number]) => {
     setCustomCoords(coords);
   }, []);
 
+  const matchedTrip = trips?.find(t => {
+    const norm = (s: string) => s.replace(/\s/g, "").toUpperCase();
+    return norm(t.departureTime) === norm(selectedTime ?? "");
+  });
+
+  const canBook = selectedTime !== null && customCoords !== null;
+
   const handleBook = async () => {
-    if (!selectedTrip) return;
+    if (!selectedTime || !customCoords) return;
     try {
-      // For custom pickup, use the first terminal ID as the API anchor
-      const pickupPointId = isCustomMode
-        ? (pickupPoints?.[0]?.id ?? 1)
-        : selectedPoint!;
+      const tripId = matchedTrip?.id ?? null;
+      const pickupPointId = pickupPoints?.[0]?.id ?? 1;
+
+      if (!tripId) {
+        toast({ title: "No matching trip", description: "The selected time has no available trip for tomorrow.", variant: "destructive" });
+        return;
+      }
 
       await createBooking.mutateAsync({
         data: {
-          tripId: selectedTrip,
+          tripId,
           pickupPointId,
-          ...(isCustomMode && customCoords
-            ? { customLat: customCoords[0], customLng: customCoords[1], pickupType: "custom" }
-            : {}),
+          customLat: customCoords[0],
+          customLng: customCoords[1],
+          pickupType: "custom",
         },
       });
+
       toast({
         title: "Booking confirmed!",
-        description: isCustomMode && customCoords
-          ? `Custom pickup at ${customCoords[0].toFixed(4)}, ${customCoords[1].toFixed(4)}`
-          : "Your seat has been reserved.",
+        description: `${direction === "inbound" ? "Go to 42 Irbid" : "Return from 42 Irbid"} · ${selectedTime} · Pickup at ${customCoords[0].toFixed(4)}, ${customCoords[1].toFixed(4)}`,
       });
       setLocation("/dashboard");
     } catch (err: any) {
       toast({ title: "Booking failed", description: err?.message || "Please try again.", variant: "destructive" });
     }
   };
-
-  const activeTrip  = trips?.find(t => t.id === selectedTrip);
-  const activePoint = pickupPoints?.find(p => p.id === selectedPoint);
 
   if (!user) return null;
 
@@ -111,188 +125,147 @@ export default function Book() {
         {/* Left: Selection panels */}
         <div className="lg:col-span-3 space-y-5">
 
-          {/* Step 1: Time */}
+          {/* Step 1: Direction + Time */}
           <div className="bg-white/[0.03] border border-white/[0.08] rounded-xl overflow-hidden">
             <div className="px-5 py-4 border-b border-white/[0.06] flex items-center gap-3">
               <div className="w-6 h-6 rounded-full bg-[#ff2e88]/20 border border-[#ff2e88]/30 flex items-center justify-center text-xs font-bold text-[#ff2e88]">1</div>
-              <span className="font-semibold text-white text-sm">Select Departure Time</span>
+              <span className="font-semibold text-white text-sm">Select Trip &amp; Time</span>
             </div>
-            <div className="p-4">
+
+            <div className="p-4 space-y-4">
+              {/* Direction Toggle */}
+              <div className="grid grid-cols-2 gap-2 p-1 bg-white/[0.04] rounded-xl border border-white/[0.06]">
+                <button
+                  onClick={() => handleDirectionChange("inbound")}
+                  className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                    direction === "inbound"
+                      ? "bg-[#ff2e88] text-white shadow-[0_0_14px_rgba(255,46,136,0.35)]"
+                      : "text-[#a7b0c0] hover:text-white"
+                  }`}
+                >
+                  <ArrowRight size={14} />
+                  Go to 42 Irbid
+                </button>
+                <button
+                  onClick={() => handleDirectionChange("outbound")}
+                  className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                    direction === "outbound"
+                      ? "bg-[#22d3ee] text-[#0d1117] shadow-[0_0_14px_rgba(34,211,238,0.35)]"
+                      : "text-[#a7b0c0] hover:text-white"
+                  }`}
+                >
+                  <ArrowLeft size={14} />
+                  Return from 42
+                </button>
+              </div>
+
+              {/* Time Slot Chips */}
               {tripsLoading ? (
-                <div className="flex items-center gap-2 py-4 text-[#a7b0c0] text-sm">
-                  <Loader2 size={16} className="animate-spin" />Loading available trips...
-                </div>
-              ) : trips?.length === 0 ? (
-                <div className="flex items-center gap-2 py-4 text-[#a7b0c0] text-sm">
-                  <Info size={15} />No trips available for tomorrow.
+                <div className="flex items-center gap-2 py-3 text-[#a7b0c0] text-sm">
+                  <Loader2 size={16} className="animate-spin" />Loading trip availability...
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {trips?.map((trip) => {
-                    const isFull = trip.availableSeats <= 0;
-                    const isSelected = selectedTrip === trip.id;
-                    return (
-                      <button
-                        key={trip.id}
-                        onClick={() => !isFull && setSelectedTrip(trip.id)}
-                        disabled={isFull}
-                        className={`w-full text-left rounded-lg border p-4 transition-all duration-150 ${
-                          isSelected
-                            ? "border-[#ff2e88]/50 bg-[#ff2e88]/10 shadow-[0_0_16px_rgba(255,46,136,0.1)]"
-                            : isFull
-                              ? "border-white/[0.05] opacity-40 cursor-not-allowed bg-white/[0.02]"
-                              : "border-white/[0.08] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <Clock size={15} className={isSelected ? "text-[#ff2e88]" : "text-[#a7b0c0]"} />
-                            <span className={`font-mono text-base font-bold ${isSelected ? "text-[#ff2e88]" : "text-white"}`}>
-                              {trip.departureTime}
+                  <p className="text-xs text-[#a7b0c0] font-medium uppercase tracking-wider">Available times</p>
+                  <div className="flex flex-wrap gap-2">
+                    {TIME_SLOTS[direction].map((slot) => {
+                      const trip = trips?.find(t => {
+                        const norm = (s: string) => s.replace(/\s/g, "").toUpperCase();
+                        return norm(t.departureTime) === norm(slot);
+                      });
+                      const isFull = trip ? trip.availableSeats <= 0 : false;
+                      const hasTrip = Boolean(trip);
+                      const isSelected = selectedTime === slot;
+
+                      return (
+                        <button
+                          key={slot}
+                          onClick={() => !isFull && setSelectedTime(isSelected ? null : slot)}
+                          disabled={isFull}
+                          className={`relative flex flex-col items-center gap-0.5 px-4 py-2.5 rounded-xl border text-sm font-mono font-bold transition-all duration-150 ${
+                            isSelected
+                              ? direction === "inbound"
+                                ? "border-[#ff2e88]/60 bg-[#ff2e88]/15 text-[#ff2e88] shadow-[0_0_14px_rgba(255,46,136,0.2)]"
+                                : "border-[#22d3ee]/60 bg-[#22d3ee]/15 text-[#22d3ee] shadow-[0_0_14px_rgba(34,211,238,0.2)]"
+                              : isFull
+                                ? "border-white/[0.05] bg-white/[0.02] text-white/20 cursor-not-allowed"
+                                : "border-white/[0.08] bg-white/[0.02] text-white hover:border-white/25 hover:bg-white/[0.05]"
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <Clock size={12} className={isSelected ? (direction === "inbound" ? "text-[#ff2e88]" : "text-[#22d3ee]") : "text-[#a7b0c0]"} />
+                            {slot}
+                          </div>
+                          {isFull && <span className="text-[9px] font-sans font-normal text-red-400/80">Full</span>}
+                          {hasTrip && !isFull && trip && (
+                            <span className={`text-[9px] font-sans font-normal flex items-center gap-0.5 ${isSelected ? "opacity-80" : "text-[#a7b0c0]"}`}>
+                              <Users size={8} />{trip.availableSeats} left
                             </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {isFull ? (
-                              <span className="text-xs text-red-400 bg-red-400/10 border border-red-400/20 px-2 py-0.5 rounded-full">Full</span>
-                            ) : (
-                              <span className="text-xs text-[#a7b0c0] flex items-center gap-1">
-                                <Users size={11} />{trip.availableSeats} left
-                              </span>
-                            )}
-                            {isSelected && <CheckCircle2 size={16} className="text-[#ff2e88]" />}
-                          </div>
-                        </div>
-                        <div className="flex gap-0.5">
-                          {Array.from({ length: 20 }, (_, i) => {
-                            const filled = i < Math.round((trip.bookedSeats / trip.totalSeats) * 20);
-                            return <div key={i} className={`flex-1 h-1 rounded-full ${filled ? (isSelected ? "bg-[#ff2e88]" : "bg-[#ff2e88]/60") : "bg-white/10"}`} />;
-                          })}
-                        </div>
-                        <div className="text-xs text-[#a7b0c0] mt-1.5">
-                          {trip.bookedSeats}/{trip.totalSeats} booked · {trip.minBookingsToConfirm} to confirm
-                        </div>
-                      </button>
-                    );
-                  })}
+                          )}
+                          {isSelected && (
+                            <CheckCircle2 size={12} className={`absolute -top-1.5 -right-1.5 ${direction === "inbound" ? "text-[#ff2e88]" : "text-[#22d3ee]"}`} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {trips?.length === 0 && (
+                    <div className="flex items-center gap-2 py-2 text-[#a7b0c0] text-sm">
+                      <Info size={15} />No trips scheduled for tomorrow.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Seat info for selected trip */}
+              {matchedTrip && (
+                <div className="pt-3 border-t border-white/[0.06]">
+                  <p className="text-xs text-[#a7b0c0] mb-2">Seat availability for selected trip</p>
+                  <SegmentBar booked={matchedTrip.bookedSeats} total={matchedTrip.totalSeats} min={matchedTrip.minBookingsToConfirm} />
                 </div>
               )}
             </div>
           </div>
 
-          {/* Step 2: Pickup Point */}
-          <div className="bg-white/[0.03] border border-white/[0.08] rounded-xl overflow-hidden">
+          {/* Step 2: Map (always visible) */}
+          <div className="bg-white/[0.03] border border-[#22d3ee]/20 rounded-xl overflow-hidden">
             <div className="px-5 py-4 border-b border-white/[0.06] flex items-center gap-3">
               <div className="w-6 h-6 rounded-full bg-[#22d3ee]/20 border border-[#22d3ee]/30 flex items-center justify-center text-xs font-bold text-[#22d3ee]">2</div>
-              <span className="font-semibold text-white text-sm">Select Pickup Point</span>
+              <span className="font-semibold text-white text-sm">Select Pickup on Map</span>
             </div>
-            <div className="p-4">
-              {pointsLoading ? (
-                <div className="flex items-center gap-2 py-4 text-[#a7b0c0] text-sm">
-                  <Loader2 size={16} className="animate-spin" />Loading pickup points...
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {/* Standard pickup points */}
-                  {pickupPoints?.map((point) => {
-                    const isSelected = selectedPoint === point.id;
-                    return (
-                      <button
-                        key={point.id}
-                        onClick={() => { setSelectedPoint(point.id); setCustomCoords(null); }}
-                        className={`w-full text-left rounded-lg border p-4 transition-all duration-150 ${
-                          isSelected
-                            ? "border-[#22d3ee]/50 bg-[#22d3ee]/10 shadow-[0_0_16px_rgba(34,211,238,0.1)]"
-                            : "border-white/[0.08] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isSelected ? "bg-[#22d3ee]/20" : "bg-white/[0.05]"}`}>
-                            <MapPin size={15} className={isSelected ? "text-[#22d3ee]" : "text-[#a7b0c0]"} />
-                          </div>
-                          <div className="flex-1">
-                            <div className={`font-medium text-sm ${isSelected ? "text-[#22d3ee]" : "text-white"}`}>{point.name}</div>
-                            {point.address && <div className="text-xs text-[#a7b0c0] mt-0.5">{point.address}</div>}
-                          </div>
-                          {isSelected && <CheckCircle2 size={16} className="text-[#22d3ee] shrink-0" />}
-                        </div>
-                      </button>
-                    );
-                  })}
 
-                  {/* ── Custom Location Option ── */}
-                  <button
-                    onClick={() => { setSelectedPoint(CUSTOM_PICKUP_ID); setCustomCoords(null); }}
-                    className={`w-full text-left rounded-lg border p-4 transition-all duration-150 ${
-                      isCustomMode
-                        ? "border-emerald-400/50 bg-emerald-400/10 shadow-[0_0_16px_rgba(52,211,153,0.1)]"
-                        : "border-white/[0.08] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isCustomMode ? "bg-emerald-400/20" : "bg-white/[0.05]"}`}>
-                        <Navigation size={15} className={isCustomMode ? "text-emerald-400" : "text-[#a7b0c0]"} />
-                      </div>
-                      <div className="flex-1">
-                        <div className={`font-medium text-sm ${isCustomMode ? "text-emerald-400" : "text-white"}`}>
-                          Custom Location (Select on Map)
-                        </div>
-                        <div className="text-xs text-[#a7b0c0] mt-0.5">
-                          {customCoords
-                            ? `📍 ${customCoords[0].toFixed(4)}, ${customCoords[1].toFixed(4)}`
-                            : "Click a point on the bus route below"}
-                        </div>
-                      </div>
-                      {isCustomMode && customCoords && <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />}
-                    </div>
-                  </button>
-                </div>
-              )}
+            <div className="px-5 py-3 bg-[#22d3ee]/[0.05] border-b border-[#22d3ee]/10 flex items-start gap-2.5">
+              <Navigation size={14} className="text-[#22d3ee] mt-0.5 shrink-0" />
+              <p className="text-sm text-[#22d3ee]/90 leading-relaxed">
+                Click anywhere on the <strong className="text-white">highlighted pink bus route</strong> to set your exact pickup location. Points off-route will be rejected.
+              </p>
             </div>
+
+            <div className="rounded-b-xl overflow-hidden">
+              <RouteMap
+                height="340px"
+                showBus={false}
+                onLocationSelect={handleLocationSelect}
+                selectedCoords={customCoords}
+              />
+            </div>
+
+            {customCoords && (
+              <div className="px-5 py-3 border-t border-emerald-400/20 bg-emerald-400/[0.05] flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-emerald-400" />
+                <span className="text-xs text-emerald-300 font-medium">
+                  Pickup confirmed at {customCoords[0].toFixed(5)}, {customCoords[1].toFixed(5)}
+                </span>
+                <button
+                  onClick={() => setCustomCoords(null)}
+                  className="ml-auto text-[10px] text-[#a7b0c0] hover:text-white underline"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
           </div>
-
-          {/* Step 3: Inline map (only shown when custom mode is active) */}
-          {isCustomMode && (
-            <div className="bg-white/[0.03] border border-emerald-400/20 rounded-xl overflow-hidden">
-              <div className="px-5 py-4 border-b border-white/[0.06] flex items-center gap-3">
-                <div className="w-6 h-6 rounded-full bg-emerald-400/20 border border-emerald-400/30 flex items-center justify-center text-xs font-bold text-emerald-400">3</div>
-                <span className="font-semibold text-white text-sm">Select Pickup on Map</span>
-              </div>
-
-              {/* Helper text */}
-              <div className="px-5 py-3 bg-emerald-400/[0.05] border-b border-emerald-400/10 flex items-start gap-2.5">
-                <Navigation size={14} className="text-emerald-400 mt-0.5 shrink-0" />
-                <p className="text-sm text-emerald-300 leading-relaxed">
-                  Click anywhere on the <strong className="text-emerald-200">highlighted pink bus route</strong> to set your exact pickup location. Points off-route will be rejected.
-                </p>
-              </div>
-
-              {/* Inline map */}
-              <div className="rounded-b-xl overflow-hidden">
-                <RouteMap
-                  height="340px"
-                  showBus={false}
-                  onLocationSelect={handleLocationSelect}
-                  selectedCoords={customCoords}
-                />
-              </div>
-
-              {/* Confirmation row */}
-              {customCoords && (
-                <div className="px-5 py-3 border-t border-emerald-400/20 bg-emerald-400/[0.05] flex items-center gap-2">
-                  <CheckCircle2 size={14} className="text-emerald-400" />
-                  <span className="text-xs text-emerald-300 font-medium">
-                    Pickup confirmed at {customCoords[0].toFixed(5)}, {customCoords[1].toFixed(5)}
-                  </span>
-                  <button
-                    onClick={() => setCustomCoords(null)}
-                    className="ml-auto text-[10px] text-[#a7b0c0] hover:text-white underline"
-                  >
-                    Clear
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Right: Summary */}
@@ -307,25 +280,30 @@ export default function Book() {
                   <span className="text-sm text-[#a7b0c0]">Date</span>
                   <span className="text-sm font-medium text-white">{format(addDays(new Date(), 1), "MMM d, yyyy")}</span>
                 </div>
+
+                <div className="flex justify-between items-center py-2.5 border-b border-white/[0.05]">
+                  <span className="text-sm text-[#a7b0c0]">Direction</span>
+                  <span className={`text-sm font-medium flex items-center gap-1.5 ${direction === "inbound" ? "text-[#ff2e88]" : "text-[#22d3ee]"}`}>
+                    {direction === "inbound" ? <ArrowRight size={13} /> : <ArrowLeft size={13} />}
+                    {direction === "inbound" ? "Go to 42" : "Return from 42"}
+                  </span>
+                </div>
+
                 <div className="flex justify-between items-center py-2.5 border-b border-white/[0.05]">
                   <span className="text-sm text-[#a7b0c0]">Departure</span>
-                  <span className={`text-sm font-mono font-bold ${activeTrip ? "text-[#ff2e88]" : "text-white/30"}`}>
-                    {activeTrip?.departureTime || "—"}
+                  <span className={`text-sm font-mono font-bold ${selectedTime ? (direction === "inbound" ? "text-[#ff2e88]" : "text-[#22d3ee]") : "text-white/30"}`}>
+                    {selectedTime || "—"}
                   </span>
                 </div>
+
                 <div className="flex justify-between items-center py-2.5">
                   <span className="text-sm text-[#a7b0c0]">Pickup</span>
-                  <span className={`text-sm font-medium text-right max-w-[140px] ${
-                    isCustomMode
-                      ? customCoords ? "text-emerald-400" : "text-amber-400"
-                      : activePoint ? "text-[#22d3ee]" : "text-white/30"
-                  }`}>
-                    {isCustomMode
-                      ? customCoords ? "Custom (on-route)" : "Select on map ↓"
-                      : activePoint?.name || "—"}
+                  <span className={`text-sm font-medium text-right max-w-[140px] ${customCoords ? "text-emerald-400" : "text-amber-400/80"}`}>
+                    {customCoords ? "Custom (on-route)" : "Select on map →"}
                   </span>
                 </div>
-                {isCustomMode && customCoords && (
+
+                {customCoords && (
                   <div className="flex justify-between items-center py-2 bg-emerald-400/[0.05] border border-emerald-400/20 rounded-lg px-3">
                     <span className="text-xs text-[#a7b0c0]">Coords</span>
                     <span className="text-xs font-mono text-emerald-400">{customCoords[0].toFixed(4)}, {customCoords[1].toFixed(4)}</span>
@@ -333,10 +311,10 @@ export default function Book() {
                 )}
               </div>
 
-              {activeTrip && (
+              {matchedTrip && (
                 <div className="pt-3 border-t border-white/[0.06]">
                   <p className="text-xs text-[#a7b0c0] mb-2">Seat availability</p>
-                  <SegmentBar booked={activeTrip.bookedSeats} total={activeTrip.totalSeats} min={activeTrip.minBookingsToConfirm} />
+                  <SegmentBar booked={matchedTrip.bookedSeats} total={matchedTrip.totalSeats} min={matchedTrip.minBookingsToConfirm} />
                 </div>
               )}
 
@@ -358,9 +336,11 @@ export default function Book() {
 
               {!canBook && (
                 <p className="text-xs text-center text-[#a7b0c0]">
-                  {isCustomMode && !customCoords
-                    ? "Click on the map route to set your custom pickup"
-                    : "Select a time slot and pickup point to continue"}
+                  {!selectedTime && !customCoords
+                    ? "Pick a direction, time, and your pickup on the map"
+                    : !selectedTime
+                      ? "Select a departure time above"
+                      : "Click the map route to set your pickup point"}
                 </p>
               )}
             </div>
