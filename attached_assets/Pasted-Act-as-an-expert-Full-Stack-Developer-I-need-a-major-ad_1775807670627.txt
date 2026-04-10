@@ -1,0 +1,30 @@
+Act as an expert Full-Stack Developer. I need a major, advanced update to the `InteractiveMap.jsx` component to make the routing realistic.
+
+**Goal:**
+Replace the straight polylines with real road routes using a routing API, animate the bus along these real roads, and implement a strict "On-Route" custom pickup selection feature.
+
+**Step 1: Real Road Routing (OSRM API)**
+* Do NOT use straight lines between terminals.
+* Fetch the actual driving route using the public OSRM API (e.g., `https://router.project-osrm.org/route/v1/driving/{coordinates}?geometries=geojson`).
+* The exact waypoint sequence MUST be (Note: OSRM uses Longitude,Latitude for the URL):
+    1. Northern Bus Terminal (Lng: 35.855603, Lat: 32.568219)
+    2. Al-Ghour New Terminal (Lng: 35.836186, Lat: 32.550640)
+    3. Sheikh Khalil Terminal (Lng: 35.855500, Lat: 32.550342)
+    4. Amman Bus Terminal (Lng: 35.869768, Lat: 32.535047)
+    5. 42 Irbid Campus (Lng: 35.871188, Lat: 32.504227)
+* Extract the coordinates from the OSRM GeoJSON response and draw the pink `Polyline` along the real streets.
+
+**Step 2: Realistic Bus Animation**
+* Update the `requestAnimationFrame` logic to animate the bus marker smoothly along the dense array of road coordinates returned by OSRM, rather than just the 5 main waypoints.
+
+**Step 3: Dynamic "On-Route" Custom Pickup Selection**
+* Implement a map click handler using `useMapEvents`.
+* When a user clicks on the map to request a custom pickup, calculate the shortest distance from the clicked `lat/lng` to the closest segment of the fetched OSRM route.
+* **Validation:** If the distance is less than ~50 meters (approx 0.0005 degrees), allow it! Place a new glowing green marker there labeled "Custom Pickup".
+* **Rejection:** If the clicked point is too far from the bus route, reject it and display an error alert/toast saying: "Invalid location. You can only request pickups directly on the bus route."
+
+**Step 4: Maintain Theme & Stability**
+* Keep the existing "42 Intranet V2" styling: CartoDB Dark Matter tile layer, cyan/pink neon glowing markers, and custom dark popups.
+* Ensure all `leaflet` imports remain client-side only to prevent Next.js SSR hydration errors.
+
+Please write the updated `InteractiveMap.jsx` code incorporating the `fetch` to OSRM and the math logic for distance validation.
