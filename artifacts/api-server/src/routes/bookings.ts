@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, bookingsTable, tripsTable, pickupPointsTable, usersTable, notificationsTable } from "@workspace/db";
-import { eq, and, desc, asc } from "drizzle-orm";
+import { eq, and, desc, asc, ne } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import {
   CreateBookingBody,
@@ -171,6 +171,29 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
 
   if (existing && existing.status !== "canceled") {
     res.status(400).json({ error: "You already have a booking for this trip" });
+    return;
+  }
+
+  // Guard: one booking per direction per calendar date
+  // Join bookings → trips to find any active (non-canceled) booking on the same date + direction
+  const conflictingRows = await db
+    .select({ status: bookingsTable.status })
+    .from(bookingsTable)
+    .innerJoin(tripsTable, eq(bookingsTable.tripId, tripsTable.id))
+    .where(
+      and(
+        eq(bookingsTable.userId, req.user!.userId),
+        eq(tripsTable.date, trip.date),          // YYYY-MM-DD only — no time component
+        eq(tripsTable.direction, trip.direction), // to_school | from_school
+        ne(bookingsTable.status, "canceled")      // ignore canceled bookings
+      )
+    );
+
+  if (conflictingRows.length > 0) {
+    const dirLabel = trip.direction === "to_school" ? "Inbound (Go to 42 Irbid)" : "Outbound (Return from 42 Irbid)";
+    res.status(400).json({
+      error: `Duplicate booking detected for this direction on this date. You already have an active ${dirLabel} booking for ${trip.date}.`,
+    });
     return;
   }
 

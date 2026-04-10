@@ -1,0 +1,102 @@
+Act as an expert Full-Stack Developer. I need to enforce a strict booking constraint in my "42 Transportation" project without breaking any existing features.
+
+## Rule (Strict Business Logic)
+
+A student is allowed a maximum of TWO bookings per calendar day:
+
+* One **Inbound** trip ("Go to 42 Irbid")
+* One **Outbound** trip ("Return from 42 Irbid")
+
+The user is NOT allowed to book the same direction more than once on the same calendar date.
+
+### Important Clarification:
+
+* The validation MUST be based on the **calendar date only (YYYY-MM-DD)**.
+* The **time component must be ignored completely**.
+* A user CAN book the same direction again on a different day.
+
+---
+
+## Task 1: Frontend Validation (BookingPage.jsx)
+
+1. Monitor user selections for:
+
+   * `date`
+   * `direction` (inbound | outbound)
+
+2. Fetch or use existing user bookings.
+
+3. Implement a real-time validation:
+
+   * If a booking exists where:
+
+     * `booking.userId === currentUser.id`
+     * `booking.date === selectedDate` (compare as YYYY-MM-DD ONLY)
+     * `booking.direction === selectedDirection`
+
+4. Then:
+
+   * Show a clear error or toast:
+     **"Conflict: You have already booked an [Inbound/Outbound] trip for this date."**
+   * Disable the **Confirm Booking** button.
+
+5. This validation must update reactively whenever:
+
+   * The user changes the date
+   * The user changes the direction
+
+6. Keep UI styling unchanged (42 Intranet V2 dark theme, muted text, etc.)
+
+---
+
+## Task 2: Backend Validation (API - POST /api/bookings)
+
+Before inserting a new booking:
+
+1. Normalize the date:
+
+   * Extract only the date part (YYYY-MM-DD)
+   * Ignore time completely
+
+2. Perform a strict database query:
+
+   * WHERE userId = ?
+   * AND date = ?
+   * AND direction = ?
+
+3. If a record exists:
+
+   * Reject the request
+   * Return:
+
+     * HTTP 400 Bad Request
+     * Message:
+       **"Duplicate booking detected for this direction on this date."**
+
+4. If not:
+
+   * Proceed with booking creation normally
+
+---
+
+## Task 3: Stability & Integration
+
+Ensure this logic does NOT break or interfere with:
+
+* 2-hour booking window restriction
+* Shuttle capacity logic
+* Waiting list system
+* OSRM routing & pickup selection
+* Existing UI/UX (42 Intranet V2 theme)
+
+---
+
+## Expected Output
+
+Provide:
+
+1. Updated React frontend logic (BookingPage.jsx)
+2. Backend validation code (Node.js / Express / Controller or service)
+3. Any required utility function for date normalization (if needed)
+
+Make sure the implementation is clean, efficient, and production-ready.

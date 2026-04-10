@@ -1,4 +1,4 @@
-import { useGetTrips, useGetPickupPoints, useCreateBooking } from "@workspace/api-client-react";
+import { useGetTrips, useGetPickupPoints, useCreateBooking, useGetBookings } from "@workspace/api-client-react";
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
@@ -85,7 +85,19 @@ export default function Book() {
 
   const { data: trips, isLoading: tripsLoading } = useGetTrips({ date: selectedDate });
   const { data: pickupPoints } = useGetPickupPoints();
+  const { data: myBookings } = useGetBookings();
   const createBooking = useCreateBooking();
+
+  // ── Direction conflict: 1 inbound + 1 outbound max per calendar date ─────
+  // Map frontend direction to the db value stored on trip.direction
+  const dbDirection = direction === "inbound" ? "to_school" : "from_school";
+  const directionConflict = myBookings?.some(
+    (b) =>
+      b.status !== "canceled" &&
+      b.trip?.date === selectedDate &&          // compare YYYY-MM-DD only
+      b.trip?.direction === dbDirection
+  ) ?? false;
+  const directionLabel = direction === "inbound" ? "Inbound (Go to 42 Irbid)" : "Outbound (Return from 42 Irbid)";
 
   const handleDirectionChange = (dir: Direction) => {
     setDirection(dir);
@@ -109,7 +121,7 @@ export default function Book() {
   });
 
   const willBeWaitlisted = matchedTrip ? matchedTrip.bookedSeats >= MAX_CAPACITY : false;
-  const canBook = selectedTime !== null && customCoords !== null;
+  const canBook = selectedTime !== null && customCoords !== null && !directionConflict;
 
   const handleBook = async () => {
     if (!selectedTime || !customCoords) return;
@@ -228,6 +240,19 @@ export default function Book() {
                   </button>
                 </div>
               </div>
+
+              {/* ── Conflict banner: same direction already booked ─────────── */}
+              {directionConflict && (
+                <div className="flex items-start gap-2.5 p-3 bg-red-500/[0.08] border border-red-500/30 rounded-xl">
+                  <AlertCircle size={15} className="text-red-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-red-300">Booking conflict</p>
+                    <p className="text-[11px] text-red-400/80 mt-0.5 leading-relaxed">
+                      You already have an active <strong className="text-red-300">{directionLabel}</strong> booking for this date. Cancel it first to rebook.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Time Slot Chips */}
               {tripsLoading ? (
@@ -453,11 +478,13 @@ export default function Book() {
 
               {!canBook && (
                 <p className="text-xs text-center text-[#a7b0c0]">
-                  {!selectedTime && !customCoords
-                    ? "Pick a direction, time, and your pickup on the map"
-                    : !selectedTime
-                      ? "Select a departure time above"
-                      : "Tap the map route or a terminal to set your pickup"}
+                  {directionConflict
+                    ? "Cancel your existing booking for this direction first"
+                    : !selectedTime && !customCoords
+                      ? "Pick a direction, time, and your pickup on the map"
+                      : !selectedTime
+                        ? "Select a departure time above"
+                        : "Tap the map route or a terminal to set your pickup"}
                 </p>
               )}
             </div>
