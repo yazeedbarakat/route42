@@ -37,17 +37,24 @@ export interface RouteMapProps {
 
 // ─── Terminals & Route ────────────────────────────────────────────────────────
 export const TERMINALS = [
-  { id: 1, name: "Northern Bus Terminal",  nameAr: "مجمع الشمالي",       lat: 32.568219717501016, lng: 35.85560315169505  },
-  { id: 2, name: "Al-Ghour New Terminal",  nameAr: "مجمع الغور الجديد",  lat: 32.55064060061745,  lng: 35.8361863228588   },
-  { id: 3, name: "Sheikh Khalil Terminal", nameAr: "مجمع الشيخ خليل",    lat: 32.55034219324052,  lng: 35.85550052285881  },
-  { id: 4, name: "Amman Bus Terminal",     nameAr: "مجمع عمان",           lat: 32.535047165765235, lng: 35.869768897719915 },
+  { id: 1, name: "Northern Terminal",  nameAr: "مجمع الشمالي",       lat: 32.568219717501016, lng: 35.85560315169505  },
+  { id: 2, name: "Al-Ghour Terminal",  nameAr: "مجمع الغور الجديد",  lat: 32.55064060061745,  lng: 35.8361863228588   },
+  { id: 3, name: "Sheikh Khalil",      nameAr: "مجمع الشيخ خليل",    lat: 32.55034219324052,  lng: 35.85550052285881  },
+  { id: 4, name: "Amman Terminal",     nameAr: "مجمع عمان",           lat: 32.535047165765235, lng: 35.869768897719915 },
+  { id: 5, name: "دوار الدرة",         nameAr: "دوار الدرة",          lat: 32.55824371537429,  lng: 35.87344062736422  },
 ] as const;
 
 export const DESTINATION = { name: "42 Irbid", lat: 32.50422734122801, lng: 35.8711883498439 };
 
-const OSRM_URL = "https://router.project-osrm.org/route/v1/driving/" +
-  "35.855603,32.568219;35.836186,32.550640;35.855500,32.550342;35.869768,32.535047;35.871188,32.504227" +
-  "?geometries=geojson&overview=full";
+// All waypoints for the OSRM Trip API (lng,lat order), source=first, destination=last
+const ALL_WAYPOINTS = [
+  ...TERMINALS.map(t => `${t.lng},${t.lat}`),
+  `${DESTINATION.lng},${DESTINATION.lat}`,
+].join(";");
+
+const OSRM_TRIP_URL =
+  `https://router.project-osrm.org/trip/v1/driving/${ALL_WAYPOINTS}` +
+  `?roundtrip=false&source=first&destination=last&geometries=geojson&overview=full`;
 
 const FALLBACK: [number, number][] = TERMINALS.map(t => [t.lat, t.lng] as [number, number])
   .concat([[DESTINATION.lat, DESTINATION.lng]]);
@@ -141,12 +148,40 @@ function orangeMarkerIcon() {
   });
 }
 
-// ─── Dark popup styles (injected once) ────────────────────────────────────────
+// ─── Styles (dark popup + permanent label tooltips) ────────────────────────────
 const POPUP_CSS = `
 .rm-popup .leaflet-popup-content-wrapper{background:transparent!important;border:none!important;box-shadow:none!important;padding:0!important;}
 .rm-popup .leaflet-popup-content{margin:0!important;}
 .rm-popup .leaflet-popup-tip-container{display:none!important;}
 .leaflet-container{background:#0a0e17!important;}
+.rm-label{
+  background:#0d1420 !important;
+  border:1px solid rgba(34,211,238,.35) !important;
+  border-radius:6px !important;
+  color:#22d3ee !important;
+  font-family:Inter,sans-serif !important;
+  font-size:11px !important;
+  font-weight:600 !important;
+  padding:3px 7px !important;
+  white-space:nowrap !important;
+  box-shadow:0 0 10px rgba(34,211,238,.2) !important;
+  pointer-events:none !important;
+}
+.rm-label::before{display:none !important;}
+.rm-label-dest{
+  background:#0d1420 !important;
+  border:1px solid rgba(255,46,136,.35) !important;
+  border-radius:6px !important;
+  color:#ff2e88 !important;
+  font-family:Inter,sans-serif !important;
+  font-size:11px !important;
+  font-weight:700 !important;
+  padding:3px 7px !important;
+  white-space:nowrap !important;
+  box-shadow:0 0 10px rgba(255,46,136,.2) !important;
+  pointer-events:none !important;
+}
+.rm-label-dest::before{display:none !important;}
 `;
 
 // ─── Child Components ─────────────────────────────────────────────────────────
@@ -213,16 +248,25 @@ function TerminalMarkers({
 
     TERMINALS.forEach((t, i) => {
       const m = L.marker([t.lat, t.lng], { icon: cyanMarkerIcon(), zIndexOffset: 500 }).addTo(map);
+
+      // Permanent visible label
+      m.bindTooltip(t.nameAr, {
+        permanent: true,
+        direction: "top",
+        className: "rm-label",
+        offset: [0, -12],
+      });
+
       m.bindPopup(
         `<div style="font-family:Inter,sans-serif;background:#0f1420;border:1px solid rgba(34,211,238,.3);border-radius:12px;padding:12px 16px;box-shadow:0 0 20px rgba(34,211,238,.15);min-width:160px;">
           <div style="color:#22d3ee;font-weight:700;font-size:14px;margin-bottom:4px;">${t.name}</div>
           <div style="color:#a7b0c0;font-size:11px;margin-bottom:8px;">${t.nameAr}</div>
           <div style="color:#fff;font-size:12px;">⏱ ETA: <strong style="color:#ff2e88">${eta(i)} min</strong></div>
-          ${onClickRef.current ? '<div style="color:#22d3ee;font-size:11px;margin-top:8px;cursor:pointer;">📍 Click to select as pickup</div>' : ''}
+          ${onClickRef.current ? '<div style="color:#22d3ee;font-size:11px;margin-top:8px;">📍 Click to select as pickup</div>' : ''}
         </div>`,
         { className: "rm-popup", closeButton: false }
       );
-      // Fire the callback when a terminal marker is clicked
+
       m.on("click", () => {
         if (onClickRef.current) {
           onClickRef.current([t.lat, t.lng]);
@@ -232,6 +276,15 @@ function TerminalMarkers({
     });
 
     const dm = L.marker([DESTINATION.lat, DESTINATION.lng], { icon: destIcon(), zIndexOffset: 600 }).addTo(map);
+
+    // Permanent label for destination
+    dm.bindTooltip("42 Irbid 🎯", {
+      permanent: true,
+      direction: "top",
+      className: "rm-label-dest",
+      offset: [0, -13],
+    });
+
     dm.bindPopup(
       `<div style="font-family:Inter,sans-serif;background:#0f1420;border:1px solid rgba(255,46,136,.3);border-radius:12px;padding:12px 16px;">
         <div style="color:#ff2e88;font-weight:700;font-size:14px;">🎯 42 Irbid</div>
@@ -334,13 +387,11 @@ export function RouteMap({
   onTerminalClick,
 }: RouteMapProps) {
   const [routePoints, setRoutePoints] = useState<[number, number][]>([]);
-  const [stopIndices, setStopIndices] = useState<number[]>([0, 0, 0, 0]);
+  const [stopIndices, setStopIndices] = useState<number[]>(TERMINALS.map(() => 0));
   const [loading, setLoading]         = useState(true);
-  const [isOsrm, setIsOsrm]           = useState(false);
   const [busIdx, setBusIdx]            = useState(0);
   const [etaTick, setEtaTick]          = useState(0);
 
-  // Internal pickup state (used when no external selectedCoords prop)
   const [internalPickup, setInternalPickup] = useState<[number, number] | null>(null);
   const effectivePickup = selectedCoords !== undefined ? selectedCoords : internalPickup;
 
@@ -351,20 +402,22 @@ export function RouteMap({
     return () => clearTimeout(t);
   }, [toast]);
 
-  // OSRM fetch
+  // OSRM Trip API fetch — finds the optimal shortest path through all waypoints
   useEffect(() => {
     let cancelled = false;
-    fetch(OSRM_URL)
+    fetch(OSRM_TRIP_URL)
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(data => {
         if (cancelled) return;
-        const raw: [number, number][] = data.routes[0].geometry.coordinates.map(
+        // Trip API returns data.trips[0]
+        const tripData = data.trips?.[0] ?? data.routes?.[0];
+        if (!tripData) throw new Error("No trip data");
+        const raw: [number, number][] = tripData.geometry.coordinates.map(
           ([lng, lat]: [number, number]) => [lat, lng] as [number, number]
         );
         const pts = interp(raw, 3);
         setRoutePoints(pts);
         setStopIndices(TERMINALS.map(t => closestIdx(t.lat, t.lng, pts)));
-        setIsOsrm(true);
         setLoading(false);
       })
       .catch(() => {
@@ -402,16 +455,14 @@ export function RouteMap({
     <div className="relative w-full" style={{ height }}>
       <style>{POPUP_CSS}</style>
 
-      {/* Loading overlay */}
       {loading && (
         <div className="absolute inset-0 z-[1001] flex flex-col items-center justify-center bg-[#0a0e17]/85 backdrop-blur-sm gap-3">
           <Loader2 size={28} className="text-[#ff2e88] animate-spin" />
-          <p className="text-white text-sm font-medium">Fetching real road route…</p>
+          <p className="text-white text-sm font-medium">Optimising route via OSRM Trip API…</p>
           <p className="text-[#a7b0c0] text-xs">router.project-osrm.org</p>
         </div>
       )}
 
-      {/* Toast */}
       {toast && (
         <div className={`
           absolute top-3 left-1/2 -translate-x-1/2 z-[1002]
@@ -427,7 +478,7 @@ export function RouteMap({
       )}
 
       <MapContainer
-        center={[32.535, 35.85]}
+        center={[32.535, 35.86]}
         zoom={13}
         style={{ height: "100%", width: "100%" }}
         zoomControl
@@ -447,7 +498,13 @@ export function RouteMap({
             {showBus && (
               <BusAnimator key={routePoints.length} routePoints={routePoints} onMove={handleBusMove} />
             )}
-            <TerminalMarkers busIdx={busIdx} stopIndices={stopIndices} totalSteps={routePoints.length} key={etaTick} onTerminalClick={onTerminalClick} />
+            <TerminalMarkers
+              busIdx={busIdx}
+              stopIndices={stopIndices}
+              totalSteps={routePoints.length}
+              key={etaTick}
+              onTerminalClick={onTerminalClick}
+            />
           </>
         )}
 
@@ -457,7 +514,6 @@ export function RouteMap({
           <CustomBookingsLayer bookings={customBookings} />
         )}
 
-        {/* Click handler active whenever route is loaded — handleValidClick routes internally or to parent */}
         {routePoints.length > 0 && (
           <ClickHandler routePoints={routePoints} onValid={handleValidClick} onInvalid={handleInvalidClick} />
         )}

@@ -6,6 +6,38 @@ import { GetTripsQueryParams, ConfirmTripParams, CancelTripParams } from "@works
 
 const router: IRouter = Router();
 
+// ─── Default schedule — mirrors the frontend TIME_SLOTS constants ─────────────
+const DEFAULT_SCHEDULE: { time: string; direction: string }[] = [
+  { time: "08:00 AM", direction: "to_school"   },
+  { time: "10:00 AM", direction: "to_school"   },
+  { time: "12:00 PM", direction: "to_school"   },
+  { time: "01:00 PM", direction: "from_school" },
+  { time: "02:00 PM", direction: "to_school"   },
+  { time: "03:00 PM", direction: "from_school" },
+  { time: "04:00 PM", direction: "to_school"   },
+  { time: "05:00 PM", direction: "from_school" },
+  { time: "06:00 PM", direction: "to_school"   },
+  { time: "07:00 PM", direction: "from_school" },
+];
+
+async function seedTripsForDate(date: string) {
+  const existing = await db.select().from(tripsTable).where(eq(tripsTable.date, date));
+  if (existing.length > 0) return existing;
+
+  const rows = DEFAULT_SCHEDULE.map(s => ({
+    date,
+    departureTime: s.time,
+    direction: s.direction,
+    status: "pending" as const,
+    totalSeats: 15,
+    bookedSeats: 0,
+    minBookingsToConfirm: 5,
+  }));
+
+  const inserted = await db.insert(tripsTable).values(rows).returning();
+  return inserted;
+}
+
 function formatTrip(trip: typeof tripsTable.$inferSelect) {
   return {
     id: trip.id,
@@ -24,6 +56,12 @@ function formatTrip(trip: typeof tripsTable.$inferSelect) {
 router.get("/trips", requireAuth, async (req, res): Promise<void> => {
   const parsed = GetTripsQueryParams.safeParse(req.query);
   const date = parsed.success && parsed.data.date ? parsed.data.date : getTomorrow();
+
+  // Only auto-seed for today or future dates
+  const today = new Date().toISOString().split("T")[0];
+  if (date >= today) {
+    await seedTripsForDate(date);
+  }
 
   const trips = await db
     .select()
@@ -68,7 +106,6 @@ router.post("/admin/trips/:id/confirm", requireAuth, requireRole("admin"), async
     return;
   }
 
-  // Confirm all pending bookings for this trip and notify students
   const pendingBookings = await db
     .select()
     .from(bookingsTable)
@@ -111,7 +148,6 @@ router.post("/admin/trips/:id/cancel", requireAuth, requireRole("admin"), async 
     return;
   }
 
-  // Cancel all pending/confirmed bookings and notify
   const affectedBookings = await db
     .select()
     .from(bookingsTable)
@@ -123,7 +159,6 @@ router.post("/admin/trips/:id/cancel", requireAuth, requireRole("admin"), async 
       .set({ status: "canceled" })
       .where(eq(bookingsTable.tripId, trip.id));
 
-    // Revert seat counts
     await db
       .update(tripsTable)
       .set({ bookedSeats: 0 })
@@ -153,7 +188,6 @@ router.get("/driver/trips", requireAuth, requireRole("driver", "admin"), async (
 
   const result = [];
   for (const trip of trips) {
-    // Get pickup stops with passenger counts
     const stops = await db
       .select({
         pickupPointId: bookingsTable.pickupPointId,

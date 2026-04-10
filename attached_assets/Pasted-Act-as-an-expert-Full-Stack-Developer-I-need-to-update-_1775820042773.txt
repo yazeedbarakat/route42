@@ -1,0 +1,13 @@
+Act as an expert Full-Stack Developer. I need to update the map routing logic in `InteractiveMap.jsx` and fix a critical booking validation bug in the `BookingPage` of my "Smart Shuttle Solution" project.
+
+**Task 1: Map Updates (`InteractiveMap.jsx`)**
+1. **Add a New Static Point:** Add a new predefined terminal marker at coordinates `[32.55824371537429, 35.87344062736422]`. Label it "دوار الدرة".
+2. **Shortest Route Optimization:** Update the OSRM API call to draw the shortest possible path connecting all predefined points. Instead of the standard `/route/v1/driving` endpoint which strictly follows array order, use the OSRM Trip API (`https://router.project-osrm.org/trip/v1/driving/{coordinates}?roundtrip=false&source=first&destination=last&geometries=geojson`) to automatically solve the Traveling Salesperson Problem (TSP) and generate the optimal shortest route connecting all terminals.
+3. **Visible Labels:** Display the names of all predefined terminals directly on the map so they are always visible without clicking. Use Leaflet's `<Tooltip permanent direction="top" className="custom-tooltip">` for these static markers. Ensure the tooltip styling matches our dark theme.
+
+**Task 2: Fix the "No matching trip" Bug (`BookingPage` / Submit Logic)**
+- **The Bug:** When a user selects a valid future date (e.g., "Tomorrow") and a valid time (e.g., "10:00 AM"), and clicks "Confirm Booking", it throws an error: "No matching trip. The selected time has no available trip for this date."
+- **The Cause & Fix:** The validation logic in the `onSubmit` or `handleConfirmBooking` function is failing. It seems to be strictly checking against a pre-existing `trips` array and failing due to either a Date/Timezone format mismatch, or because the trip record doesn't exist yet for tomorrow.
+- **Instruction:** Modify the booking submission logic. If the user selects a valid Date and Time from the allowed dynamic slots, the system should ACCEPT the booking. If your logic requires a `tripId`, dynamically generate it or auto-create the trip for that date/time slot. Bypass the strict pre-existing trip check that is blocking the user.
+
+Please provide the updated `InteractiveMap.jsx` code and the specific fixed submission logic/functions for the `BookingPage`. Keep the existing "42 Intranet V2" visual theme intact.
