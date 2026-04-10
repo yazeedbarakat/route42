@@ -35,6 +35,10 @@ async function formatBooking(booking: typeof bookingsTable.$inferSelect) {
     userId: booking.userId,
     tripId: booking.tripId,
     pickupPointId: booking.pickupPointId,
+    pickupType: booking.pickupType,
+    pickupName: booking.pickupName,
+    customLat: booking.customLat,
+    customLng: booking.customLng,
     status: booking.status,
     createdAt: booking.createdAt.toISOString(),
     trip: trip ? {
