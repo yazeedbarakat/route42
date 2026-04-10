@@ -146,7 +146,11 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center gap-1 mt-0.5">
                       <MapPin size={11} className="text-[#a7b0c0]" />
-                      <span className="text-xs text-[#a7b0c0] truncate">{booking.pickupPoint?.name}</span>
+                      <span className="text-xs text-[#a7b0c0] truncate">
+                        {booking.pickupType === "fixed"
+                          ? (booking.pickupName || booking.pickupPoint?.name || "Fixed Pickup")
+                          : "Custom Pickup"}
+                      </span>
                     </div>
                   </div>
                   <StatusBadge status={booking.status} />

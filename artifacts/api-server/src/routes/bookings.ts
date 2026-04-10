@@ -221,18 +221,24 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
       .set({ bookedSeats: newBookedSeats })
       .where(eq(tripsTable.id, tripId));
 
-    // Auto-confirm trip if minimum bookings reached
-    if (newBookedSeats >= trip.minBookingsToConfirm && trip.status === "pending") {
-      await db
-        .update(tripsTable)
-        .set({ status: "confirmed" })
-        .where(eq(tripsTable.id, tripId));
+    // Auto-confirm: if the minimum threshold is met (either just reached or trip already confirmed),
+    // promote ALL pending bookings for this trip (including the one just created) to "confirmed".
+    if (newBookedSeats >= trip.minBookingsToConfirm) {
+      if (trip.status === "pending") {
+        // Promote the trip itself to confirmed
+        await db
+          .update(tripsTable)
+          .set({ status: "confirmed" })
+          .where(eq(tripsTable.id, tripId));
+      }
 
+      // Grab every pending booking (includes the newly inserted one)
       const pendingBookings = await db
         .select()
         .from(bookingsTable)
         .where(and(eq(bookingsTable.tripId, tripId), eq(bookingsTable.status, "pending")));
 
+      // Bulk-update them all to confirmed
       await db
         .update(bookingsTable)
         .set({ status: "confirmed" })
@@ -245,9 +251,8 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
           "trip_confirmed"
         );
       }
-    }
-
-    if (isWaiting === false && bookingStatus === "pending") {
+    } else {
+      // Below the threshold — booking stays pending, notify the user
       await sendNotification(
         req.user!.userId,
         `Booking received for ${trip.date} at ${trip.departureTime}. You're on the list — trip confirms when enough riders join.`,
