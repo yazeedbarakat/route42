@@ -230,16 +230,20 @@ router.get("/driver/trips", requireAuth, requireRole("driver", "admin"), async (
   res.json(result);
 });
 
-// ─── Driver: full trip list for today with individual passenger manifest ──────
+// ─── Driver: full trip list for a given date (defaults to today) ──────────────
 router.get("/driver/trips/today", requireAuth, requireRole("driver", "admin"), async (req, res): Promise<void> => {
   const today = new Date().toISOString().split("T")[0];
+  const rawDate = typeof req.query.date === "string" ? req.query.date : today;
+  const dateISO = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : today;
 
-  await seedTripsForDate(today);
+  if (dateISO >= today) {
+    await seedTripsForDate(dateISO);
+  }
 
   const trips = await db
     .select()
     .from(tripsTable)
-    .where(eq(tripsTable.date, today));
+    .where(eq(tripsTable.date, dateISO));
 
   const result = [];
   for (const trip of trips) {
@@ -248,6 +252,7 @@ router.get("/driver/trips/today", requireAuth, requireRole("driver", "admin"), a
         bookingId: bookingsTable.id,
         studentName: usersTable.name,
         studentEmail: usersTable.email,
+        studentPhone: usersTable.phone,
         pickupType: bookingsTable.pickupType,
         pickupName: bookingsTable.pickupName,
         customLat: bookingsTable.customLat,
@@ -264,8 +269,6 @@ router.get("/driver/trips/today", requireAuth, requireRole("driver", "admin"), a
         )
       );
 
-    if (passengers.length === 0) continue;
-
     result.push({
       id: trip.id,
       date: trip.date,
@@ -279,6 +282,7 @@ router.get("/driver/trips/today", requireAuth, requireRole("driver", "admin"), a
         bookingId: p.bookingId,
         studentName: p.studentName,
         studentEmail: p.studentEmail,
+        studentPhone: p.studentPhone ?? null,
         pickupType: p.pickupType,
         pickupName: p.pickupType === "fixed" ? (p.pickupPointName ?? p.pickupName) : p.pickupName,
         customLat: p.customLat ? parseFloat(p.customLat) : null,

@@ -3,11 +3,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { useEffect, useState } from "react";
-import { format } from "date-fns";
+import { format, addDays } from "date-fns";
 import {
   Truck, Users, MapPin, Clock, Moon, Map,
   CheckCircle2, XCircle, ChevronDown, ChevronUp,
-  UserCheck, AlertTriangle, Mail, Navigation, RefreshCw,
+  UserCheck, AlertTriangle, Navigation, RefreshCw,
+  Phone, Play, BarChart3, Zap, TrendingUp, CalendarDays,
 } from "lucide-react";
 import { RouteMap, type CustomBooking } from "@/components/route-map";
 
@@ -16,6 +17,7 @@ interface Passenger {
   bookingId: number;
   studentName: string;
   studentEmail: string;
+  studentPhone: string | null;
   pickupType: "fixed" | "custom";
   pickupName: string | null;
   customLat: number | null;
@@ -34,9 +36,22 @@ interface DriverTripToday {
   passengers: Passenger[];
 }
 
+// ─── Date helpers ──────────────────────────────────────────────────────────────
+function getDateOptions() {
+  const today = new Date();
+  return [0, 1, 2].map(offset => {
+    const d = addDays(today, offset);
+    return {
+      iso: format(d, "yyyy-MM-dd"),
+      label: offset === 0 ? "Today" : offset === 1 ? "Tomorrow" : "Day After",
+      display: format(d, "EEE, MMM d"),
+    };
+  });
+}
+
 // ─── API helpers ──────────────────────────────────────────────────────────────
-const fetchTodayTrips = () =>
-  customFetch<DriverTripToday[]>("/api/driver/trips/today");
+const fetchTripsForDate = (date: string) =>
+  customFetch<DriverTripToday[]>(`/api/driver/trips/today?date=${date}`);
 
 const acceptTrip = (id: number) =>
   customFetch(`/api/driver/trips/${id}/accept`, { method: "POST" });
@@ -72,19 +87,96 @@ function DirectionBadge({ direction }: { direction: string }) {
   );
 }
 
-function TripCard({ trip }: { trip: DriverTripToday }) {
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  color,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string | number;
+  sub?: string;
+  color: string;
+}) {
+  return (
+    <div
+      className="relative overflow-hidden rounded-2xl border p-4 flex flex-col gap-2"
+      style={{
+        background: `linear-gradient(135deg, ${color}12 0%, transparent 60%)`,
+        borderColor: `${color}28`,
+        boxShadow: `0 0 20px ${color}0a`,
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <div
+          className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: `${color}20`, boxShadow: `0 0 10px ${color}40` }}
+        >
+          <Icon size={15} style={{ color }} />
+        </div>
+        <span className="text-xs text-[#a7b0c0] font-medium">{label}</span>
+      </div>
+      <p className="text-2xl font-bold text-white font-mono leading-none">{value}</p>
+      {sub && <p className="text-[11px] text-[#a7b0c0]">{sub}</p>}
+    </div>
+  );
+}
+
+function DailyStats({ trips }: { trips: DriverTripToday[] }) {
+  const active = trips.filter(t => t.status !== "canceled");
+  const tripsWithPassengers = active.filter(t => t.passengers.length > 0);
+  const totalPassengers = tripsWithPassengers.reduce((s, t) => s + t.passengers.length, 0);
+  const totalSeats = tripsWithPassengers.length * 15;
+  const efficiency = totalSeats > 0 ? Math.round((totalPassengers / totalSeats) * 100) : 0;
+
+  let peakTime = "—";
+  let peakCount = 0;
+  for (const t of tripsWithPassengers) {
+    if (t.passengers.length > peakCount) {
+      peakCount = t.passengers.length;
+      peakTime = t.departureTime;
+    }
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <BarChart3 size={15} className="text-[#ff2e88]" />
+        <h2 className="text-sm font-bold text-white tracking-wide uppercase">Daily Overview</h2>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <StatCard icon={Truck}       label="Total Trips"       value={tripsWithPassengers.length} sub="with bookings" color="#22d3ee" />
+        <StatCard icon={Users}       label="Total Passengers"  value={totalPassengers}             sub="across all trips" color="#ff2e88" />
+        <StatCard icon={Clock}       label="Peak Time"         value={peakTime}                    sub={peakCount > 0 ? `${peakCount} passengers` : "no data"} color="#facc15" />
+        <StatCard icon={TrendingUp}  label="Efficiency"        value={`${efficiency}%`}            sub="seats filled" color="#34d399" />
+      </div>
+    </div>
+  );
+}
+
+function TripCard({
+  trip,
+  isStarted,
+  onStartTrip,
+}: {
+  trip: DriverTripToday;
+  isStarted: boolean;
+  onStartTrip: (id: number) => void;
+}) {
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [showMap, setShowMap] = useState(false);
 
   const acceptMut = useMutation({
     mutationFn: () => acceptTrip(trip.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["driver", "trips", "today"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["driver", "trips"] }),
   });
 
   const cancelMut = useMutation({
     mutationFn: () => cancelTrip(trip.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["driver", "trips", "today"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["driver", "trips"] }),
   });
 
   const customMarkers: CustomBooking[] = trip.passengers
@@ -98,9 +190,18 @@ function TripCard({ trip }: { trip: DriverTripToday }) {
 
   const isBusy = acceptMut.isPending || cancelMut.isPending;
   const isCanceled = trip.status === "canceled";
+  const hasPassengers = trip.passengers.length > 0;
 
   return (
-    <div className={`bg-white/[0.03] border rounded-2xl overflow-hidden transition-opacity ${isCanceled ? "opacity-50" : "border-white/[0.08]"}`}>
+    <div
+      className={`border rounded-2xl overflow-hidden transition-all ${
+        isCanceled
+          ? "opacity-50 border-white/[0.06] bg-white/[0.02]"
+          : isStarted
+          ? "border-[#22d3ee]/30 bg-[#22d3ee]/[0.04] shadow-[0_0_24px_rgba(34,211,238,0.08)]"
+          : "border-white/[0.08] bg-white/[0.03]"
+      }`}
+    >
       {/* ── Trip header ── */}
       <div className="bg-gradient-to-r from-[#ff2e88]/15 to-[#7c3aed]/10 border-b border-white/[0.06] px-5 py-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -126,13 +227,28 @@ function TripCard({ trip }: { trip: DriverTripToday }) {
           {trip.status === "pending" && (
             <button
               onClick={() => acceptMut.mutate()}
-              disabled={isBusy || trip.passengers.length === 0}
+              disabled={isBusy || !hasPassengers}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <UserCheck size={15} />
               {acceptMut.isPending ? "Accepting…" : "Accept Trip"}
             </button>
           )}
+
+          {hasPassengers && (
+            <button
+              onClick={() => onStartTrip(trip.id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+                isStarted
+                  ? "bg-[#22d3ee]/20 border border-[#22d3ee]/50 text-[#22d3ee] shadow-[0_0_12px_rgba(34,211,238,0.3)]"
+                  : "bg-[#22d3ee]/10 border border-[#22d3ee]/25 text-[#22d3ee] hover:bg-[#22d3ee]/20"
+              }`}
+            >
+              <Play size={14} className={isStarted ? "fill-[#22d3ee]" : ""} />
+              {isStarted ? "Trip Active" : "Start Trip"}
+            </button>
+          )}
+
           <button
             onClick={() => cancelMut.mutate()}
             disabled={isBusy}
@@ -141,6 +257,7 @@ function TripCard({ trip }: { trip: DriverTripToday }) {
             <XCircle size={15} />
             {cancelMut.isPending ? "Canceling…" : "Cancel Trip"}
           </button>
+
           {trip.status === "pending" && trip.passengers.length < trip.minBookingsToConfirm && (
             <span className="flex items-center gap-1.5 text-xs text-[#facc15] ml-auto">
               <AlertTriangle size={12} />
@@ -176,6 +293,7 @@ function TripCard({ trip }: { trip: DriverTripToday }) {
                     <th className="text-left px-5 py-2.5 font-semibold">#</th>
                     <th className="text-left px-3 py-2.5 font-semibold">Student</th>
                     <th className="text-left px-3 py-2.5 font-semibold">Pickup</th>
+                    <th className="text-left px-3 py-2.5 font-semibold">Contact</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -184,22 +302,32 @@ function TripCard({ trip }: { trip: DriverTripToday }) {
                       <td className="px-5 py-3 text-[#a7b0c0] font-mono text-xs">{i + 1}</td>
                       <td className="px-3 py-3">
                         <p className="font-semibold text-white leading-tight">{p.studentName}</p>
-                        <p className="flex items-center gap-1 text-[11px] text-[#a7b0c0] mt-0.5">
-                          <Mail size={10} />
-                          {p.studentEmail}
-                        </p>
+                        <p className="text-[11px] text-[#a7b0c0] mt-0.5 truncate max-w-[140px]">{p.studentEmail}</p>
                       </td>
                       <td className="px-3 py-3">
                         {p.pickupType === "custom" ? (
                           <span className="flex items-center gap-1.5 text-xs text-[#fb923c]">
-                            <span className="w-2 h-2 rounded-full bg-[#fb923c] shadow-[0_0_6px_rgba(251,146,60,0.8)]" />
-                            {p.pickupName ?? "Custom"}
+                            <span className="w-2 h-2 rounded-full bg-[#fb923c] shadow-[0_0_6px_rgba(251,146,60,0.8)] shrink-0" />
+                            {p.pickupName ?? "Custom Pickup"}
                           </span>
                         ) : (
                           <span className="flex items-center gap-1.5 text-xs text-[#22d3ee]">
-                            <MapPin size={11} />
+                            <MapPin size={11} className="shrink-0" />
                             {p.pickupName ?? "—"}
                           </span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3">
+                        {p.studentPhone ? (
+                          <a
+                            href={`tel:${p.studentPhone}`}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#ff2e88]/10 border border-[#ff2e88]/25 text-[#ff2e88] hover:bg-[#ff2e88]/20 transition-colors"
+                          >
+                            <Phone size={11} />
+                            {p.studentPhone}
+                          </a>
+                        ) : (
+                          <span className="text-xs text-[#a7b0c0]/50 italic">No phone</span>
                         )}
                       </td>
                     </tr>
@@ -261,6 +389,11 @@ function TripCard({ trip }: { trip: DriverTripToday }) {
 export default function DriverDashboard() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const dateOptions = getDateOptions();
+  const [selectedDateIdx, setSelectedDateIdx] = useState(0);
+  const [activeTrip, setActiveTrip] = useState<number | null>(null);
+
+  const selectedDate = dateOptions[selectedDateIdx];
 
   useEffect(() => {
     if (!user) setLocation("/");
@@ -268,20 +401,25 @@ export default function DriverDashboard() {
   }, [user, setLocation]);
 
   const { data: trips, isLoading, isFetching, error, refetch } = useQuery({
-    queryKey: ["driver", "trips", "today"],
-    queryFn: fetchTodayTrips,
+    queryKey: ["driver", "trips", selectedDate.iso],
+    queryFn: () => fetchTripsForDate(selectedDate.iso),
     enabled: !!user,
-    refetchInterval: 15_000,
+    refetchInterval: selectedDateIdx === 0 ? 15_000 : false,
   });
 
   if (!user) return null;
 
   const activeTrips = trips?.filter(t => t.status !== "canceled" && t.passengers.length > 0) ?? [];
+  const allTrips = trips ?? [];
   const canceledTrips = trips?.filter(t => t.status === "canceled") ?? [];
+
+  const handleStartTrip = (id: number) => {
+    setActiveTrip(prev => (prev === id ? null : id));
+  };
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="bg-gradient-to-br from-emerald-400/10 to-emerald-400/5 border border-emerald-400/20 rounded-2xl p-5">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-emerald-400/20 flex items-center justify-center shrink-0">
@@ -289,7 +427,7 @@ export default function DriverDashboard() {
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-lg font-bold text-white">Driver Dashboard</h1>
-            <p className="text-sm text-[#a7b0c0]">{user.name} · {format(new Date(), "EEEE, MMMM d")}</p>
+            <p className="text-sm text-[#a7b0c0]">{user.name}</p>
           </div>
           <div className="flex items-center gap-3 shrink-0">
             {trips && (
@@ -310,21 +448,37 @@ export default function DriverDashboard() {
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-[#a7b0c0] px-1 flex-wrap">
-        <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-[#facc15]" /> Pending (can accept or cancel)
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-400" /> Confirmed (cancel if emergency)
-        </span>
+      {/* ── 3-Day Date Selector ── */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <CalendarDays size={15} className="text-[#ff2e88]" />
+          <h2 className="text-sm font-bold text-white tracking-wide uppercase">Schedule</h2>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {dateOptions.map((opt, idx) => (
+            <button
+              key={opt.iso}
+              onClick={() => { setSelectedDateIdx(idx); setActiveTrip(null); }}
+              className={`flex flex-col items-center gap-0.5 px-3 py-3 rounded-2xl border text-sm font-semibold transition-all ${
+                selectedDateIdx === idx
+                  ? "bg-[#ff2e88]/15 border-[#ff2e88]/40 text-[#ff2e88] shadow-[0_0_16px_rgba(255,46,136,0.2)]"
+                  : "bg-white/[0.03] border-white/[0.08] text-[#a7b0c0] hover:bg-white/[0.06] hover:text-white"
+              }`}
+            >
+              <span className={`text-base font-bold ${selectedDateIdx === idx ? "text-[#ff2e88]" : "text-white"}`}>
+                {opt.label}
+              </span>
+              <span className="text-[11px] font-normal">{opt.display}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Trip list */}
+      {/* ── Loading / Error states ── */}
       {isLoading ? (
         <div className="flex items-center justify-center py-16 gap-3">
           <div className="w-6 h-6 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
-          <span className="text-[#a7b0c0]">Loading today's schedule…</span>
+          <span className="text-[#a7b0c0]">Loading schedule…</span>
         </div>
       ) : error ? (
         <div className="text-center py-12 bg-red-500/10 border border-red-500/20 rounded-2xl">
@@ -332,49 +486,88 @@ export default function DriverDashboard() {
           <p className="text-white font-semibold">Could not load trips</p>
           <p className="text-[#a7b0c0] text-sm mt-1">Please refresh the page.</p>
         </div>
-      ) : activeTrips.length === 0 ? (
-        <div className="text-center py-16 bg-white/[0.03] border border-white/[0.08] rounded-2xl">
-          <div className="w-16 h-16 rounded-full bg-white/[0.05] flex items-center justify-center mx-auto mb-4">
-            <Moon size={28} className="text-[#a7b0c0]" />
-          </div>
-          <p className="text-xl font-bold text-white">No Active Trips</p>
-          <p className="text-[#a7b0c0] mt-2 max-w-xs mx-auto text-sm">No active trips with passengers scheduled for today.</p>
-          <button
-            onClick={() => refetch()}
-            disabled={isFetching}
-            className="mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-[#22d3ee]/10 border border-[#22d3ee]/25 text-[#22d3ee] hover:bg-[#22d3ee]/20 transition-colors disabled:opacity-50"
-          >
-            <RefreshCw size={13} className={isFetching ? "animate-spin" : ""} />
-            Check for new bookings
-          </button>
-        </div>
       ) : (
-        <div className="space-y-5">
-          {activeTrips.map(trip => (
-            <TripCard key={trip.id} trip={trip} />
-          ))}
-        </div>
-      )}
+        <>
+          {/* ── Daily Stats ── */}
+          {allTrips.length > 0 && <DailyStats trips={allTrips} />}
 
-      {/* Canceled trips — collapsed section */}
-      {canceledTrips.length > 0 && (
-        <details className="bg-white/[0.02] border border-white/[0.06] rounded-2xl overflow-hidden">
-          <summary className="px-5 py-3 flex items-center gap-2 cursor-pointer text-sm text-[#a7b0c0] select-none">
-            <XCircle size={14} className="text-red-400/60" />
-            {canceledTrips.length} canceled trip{canceledTrips.length > 1 ? "s" : ""} today (hidden)
-          </summary>
-          <div className="p-4 space-y-4">
-            {canceledTrips.map(trip => <TripCard key={trip.id} trip={trip} />)}
+          {/* ── Legend ── */}
+          <div className="flex items-center gap-4 text-xs text-[#a7b0c0] px-1 flex-wrap">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#facc15]" /> Pending (can accept or cancel)
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" /> Confirmed (cancel if emergency)
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Zap size={10} className="text-[#22d3ee]" /> Start Trip to highlight route on map
+            </span>
           </div>
-        </details>
-      )}
 
-      {/* Auto-refresh note */}
-      {!isLoading && !error && (
-        <p className="text-center text-xs text-[#a7b0c0]/60">
-          <CheckCircle2 size={11} className="inline mr-1" />
-          Auto-refreshes every 15 s · or use the ↻ button for instant update
-        </p>
+          {/* ── Trip List ── */}
+          {activeTrips.length === 0 ? (
+            <div className="text-center py-16 bg-white/[0.03] border border-white/[0.08] rounded-2xl">
+              <div className="w-16 h-16 rounded-full bg-white/[0.05] flex items-center justify-center mx-auto mb-4">
+                <Moon size={28} className="text-[#a7b0c0]" />
+              </div>
+              <p className="text-xl font-bold text-white">No Active Trips</p>
+              <p className="text-[#a7b0c0] mt-2 max-w-xs mx-auto text-sm">
+                No trips with passengers scheduled for {selectedDate.display}.
+              </p>
+              <button
+                onClick={() => refetch()}
+                disabled={isFetching}
+                className="mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-[#22d3ee]/10 border border-[#22d3ee]/25 text-[#22d3ee] hover:bg-[#22d3ee]/20 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={13} className={isFetching ? "animate-spin" : ""} />
+                Check for new bookings
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {activeTrips.map(trip => (
+                <TripCard
+                  key={trip.id}
+                  trip={trip}
+                  isStarted={activeTrip === trip.id}
+                  onStartTrip={handleStartTrip}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* ── Canceled trips ── */}
+          {canceledTrips.length > 0 && (
+            <details className="bg-white/[0.02] border border-white/[0.06] rounded-2xl overflow-hidden">
+              <summary className="px-5 py-3 flex items-center gap-2 cursor-pointer text-sm text-[#a7b0c0] select-none">
+                <XCircle size={14} className="text-red-400/60" />
+                {canceledTrips.length} canceled trip{canceledTrips.length > 1 ? "s" : ""} for {selectedDate.display} (hidden)
+              </summary>
+              <div className="p-4 space-y-4">
+                {canceledTrips.map(trip => (
+                  <TripCard
+                    key={trip.id}
+                    trip={trip}
+                    isStarted={false}
+                    onStartTrip={() => {}}
+                  />
+                ))}
+              </div>
+            </details>
+          )}
+
+          {/* ── Auto-refresh note ── */}
+          {selectedDateIdx === 0 ? (
+            <p className="text-center text-xs text-[#a7b0c0]/60">
+              <CheckCircle2 size={11} className="inline mr-1" />
+              Auto-refreshes every 15 s · or use the ↻ button for instant update
+            </p>
+          ) : (
+            <p className="text-center text-xs text-[#a7b0c0]/60">
+              Viewing {selectedDate.display} schedule · use ↻ to refresh
+            </p>
+          )}
+        </>
       )}
     </div>
   );
