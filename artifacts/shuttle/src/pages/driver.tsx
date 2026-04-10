@@ -444,6 +444,7 @@ function TripCard({
                   showBus={false}
                   customBookings={customMarkers}
                   userRole="driver"
+                  isTripActive={isStarted}
                   animateRoute={isStarted}
                   onDriverProgress={handleDriverProgress}
                 />

@@ -48,6 +48,12 @@ export interface RouteMapProps {
    * "student" → dark theme (default)
    */
   userRole?: string;
+  /**
+   * Driver only — when true the trip is in progress:
+   *   shows the TSP polyline, clustered pickup markers, and bus animation.
+   * When false (default) only the static light-theme map with terminal pins is shown.
+   */
+  isTripActive?: boolean;
   /** When true (driver only), start the progressive route animation */
   animateRoute?: boolean;
   /** Fires as the animated bus progresses — use to update status panel outside the map */
@@ -594,6 +600,7 @@ export function RouteMap({
   onBusMoved,
   onTerminalClick,
   userRole,
+  isTripActive = false,
   animateRoute = false,
   onDriverProgress,
 }: RouteMapProps) {
@@ -625,6 +632,13 @@ export function RouteMap({
 
   // ── OSRM fetch ───────────────────────────────────────────────────────────
   useEffect(() => {
+    // Drivers only fetch the dynamic route while the trip is active.
+    // In the inactive state they see a static terminal-only map.
+    if (isDriver && !isTripActive) {
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
     let url: string;
     let fallbackPts: [number, number][];
@@ -669,7 +683,7 @@ export function RouteMap({
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDriver, JSON.stringify(customBookings?.map(b => `${b.lat.toFixed(5)},${b.lng.toFixed(5)}`))]);
+  }, [isDriver, isTripActive, JSON.stringify(customBookings?.map(b => `${b.lat.toFixed(5)},${b.lng.toFixed(5)}`))]);
 
   // ── Callbacks ────────────────────────────────────────────────────────────
   const handleBusMove = useCallback((idx: number) => {
@@ -738,8 +752,8 @@ export function RouteMap({
       >
         <TileLayer url={tileUrl} />
 
-        {/* Route polyline (grey base) */}
-        {routePoints.length > 0 && (
+        {/* Route polyline — drivers only see it when the trip is active */}
+        {(isDriver ? isTripActive : true) && routePoints.length > 0 && (
           <>
             <Polyline
               positions={routePoints}
@@ -758,8 +772,8 @@ export function RouteMap({
           </>
         )}
 
-        {/* Auto-zoom to route bounds for driver */}
-        {isDriver && routePoints.length > 0 && (
+        {/* Auto-zoom to route bounds — only when the active route is loaded */}
+        {isDriver && isTripActive && routePoints.length > 0 && (
           <FitBoundsToRoute routePoints={routePoints} />
         )}
 
@@ -779,16 +793,26 @@ export function RouteMap({
           </>
         )}
 
-        {/* Driver: clustered stop markers with passed-state */}
-        {isDriver && driverClusters.length > 0 && (
+        {/* Driver inactive: static terminal pins so the map isn't empty */}
+        {isDriver && !isTripActive && (
+          <TerminalMarkers
+            busIdx={0}
+            stopIndices={TERMINALS.map(() => 0)}
+            totalSteps={0}
+            onTerminalClick={onTerminalClick}
+          />
+        )}
+
+        {/* Driver active: clustered student pickup markers */}
+        {isDriver && isTripActive && driverClusters.length > 0 && (
           <DriverClusteredMarkers
             clusters={driverClusters}
             passedStops={passedStops}
           />
         )}
 
-        {/* Driver: progressive trip animation */}
-        {isDriver && animateRoute && routePoints.length > 0 && driverClusters.length > 0 && (
+        {/* Driver active: progressive trip animation */}
+        {isDriver && isTripActive && animateRoute && routePoints.length > 0 && driverClusters.length > 0 && (
           <DriverTripAnimator
             key={`anim-${routePoints.length}`}
             routePoints={routePoints}
