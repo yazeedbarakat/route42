@@ -148,12 +148,25 @@ function orangeMarkerIcon() {
   });
 }
 
-// ─── Styles (dark popups) ─────────────────────────────────────────────────────
+// ─── Styles (dark popups + hover tooltips) ────────────────────────────────────
 const POPUP_CSS = `
 .rm-popup .leaflet-popup-content-wrapper{background:transparent!important;border:none!important;box-shadow:none!important;padding:0!important;}
 .rm-popup .leaflet-popup-content{margin:0!important;}
 .rm-popup .leaflet-popup-tip-container{display:none!important;}
 .leaflet-container{background:#0a0e17!important;}
+.rm-tooltip{
+  background:#0d1420 !important;
+  border:1px solid rgba(34,211,238,.4) !important;
+  border-radius:7px !important;
+  color:#22d3ee !important;
+  font-family:Inter,sans-serif !important;
+  font-size:12px !important;
+  font-weight:600 !important;
+  padding:4px 10px !important;
+  white-space:nowrap !important;
+  box-shadow:0 0 12px rgba(34,211,238,.2) !important;
+}
+.rm-tooltip::before{display:none !important;}
 `;
 
 // ─── Child Components ─────────────────────────────────────────────────────────
@@ -220,6 +233,12 @@ function TerminalMarkers({
 
     TERMINALS.forEach((t, i) => {
       const m = L.marker([t.lat, t.lng], { icon: cyanMarkerIcon(), zIndexOffset: 500 }).addTo(map);
+
+      m.bindTooltip(t.nameAr, {
+        direction: "top",
+        offset: [0, -12],
+        className: "rm-tooltip",
+      });
 
       m.bindPopup(
         `<div style="font-family:Inter,sans-serif;background:#0f1420;border:1px solid rgba(34,211,238,.3);border-radius:12px;padding:12px 16px;box-shadow:0 0 20px rgba(34,211,238,.15);min-width:160px;">
