@@ -109,8 +109,19 @@ export default function Book() {
     setSelectedTime(null);
   };
 
+  // Track whether the selected location is an official terminal/bus-hub
+  const [isTerminalSelected, setIsTerminalSelected] = useState(false);
+
+  // Route-click custom pickup — marks as non-terminal
   const handleLocationSelect = useCallback((coords: [number, number]) => {
     setCustomCoords(coords);
+    setIsTerminalSelected(false);
+  }, []);
+
+  // Terminal-click — marks as official station, disables custom pickup
+  const handleTerminalClick = useCallback((coords: [number, number]) => {
+    setCustomCoords(coords);
+    setIsTerminalSelected(true);
   }, []);
 
   const selectedIsToday = selectedDate === dateOptions[0].value;
@@ -350,38 +361,56 @@ export default function Book() {
             </div>
           </div>
 
-          {/* Step 2: Map (always visible) */}
+          {/* Step 2: Map — label adapts to direction */}
           <div className="bg-white/[0.03] border border-[#22d3ee]/20 rounded-xl overflow-hidden">
             <div className="px-5 py-4 border-b border-white/[0.06] flex items-center gap-3">
               <div className="w-6 h-6 rounded-full bg-[#22d3ee]/20 border border-[#22d3ee]/30 flex items-center justify-center text-xs font-bold text-[#22d3ee]">2</div>
-              <span className="font-semibold text-white text-sm">Select Pickup on Map</span>
+              {/* "Get Off Point" for outbound (campus → home), "Pickup" for inbound */}
+              <span className="font-semibold text-white text-sm">
+                {direction === "outbound" ? "Select Get Off Point on Map" : "Select Pickup on Map"}
+              </span>
             </div>
 
             <div className="px-5 py-3 bg-[#22d3ee]/[0.05] border-b border-[#22d3ee]/10 flex items-start gap-2.5">
               <Navigation size={14} className="text-[#22d3ee] mt-0.5 shrink-0" />
               <p className="text-sm text-[#22d3ee]/90 leading-relaxed">
-                Click anywhere on the <strong className="text-white">highlighted pink bus route</strong> or tap a <strong className="text-white">terminal marker</strong> to set your pickup location.
+                {isTerminalSelected
+                  ? <>Official <strong className="text-white">Bus Hub</strong> selected — custom on-route stops are disabled for station bookings.</>
+                  : <>
+                      Tap a <strong className="text-white">terminal marker</strong> for an official bus hub, or click
+                      the <strong className="text-white">pink route</strong> for a custom{" "}
+                      {direction === "outbound" ? "get-off" : "pickup"} point.
+                    </>
+                }
               </p>
             </div>
 
             <div className="rounded-b-xl overflow-hidden">
+              {/* When a terminal is selected, onLocationSelect is omitted to disable custom route clicks */}
               <RouteMap
                 height="340px"
                 showBus={false}
-                onLocationSelect={handleLocationSelect}
-                onTerminalClick={handleLocationSelect}
+                onLocationSelect={isTerminalSelected ? undefined : handleLocationSelect}
+                onTerminalClick={handleTerminalClick}
                 selectedCoords={customCoords}
               />
             </div>
 
             {customCoords && (
-              <div className="px-5 py-3 border-t border-emerald-400/20 bg-emerald-400/[0.05] flex items-center gap-2">
-                <CheckCircle2 size={14} className="text-emerald-400" />
-                <span className="text-xs text-emerald-300 font-medium">
-                  Pickup confirmed at {customCoords[0].toFixed(5)}, {customCoords[1].toFixed(5)}
+              <div className={`px-5 py-3 border-t flex items-center gap-2 ${
+                isTerminalSelected
+                  ? "border-[#22d3ee]/20 bg-[#22d3ee]/[0.05]"
+                  : "border-emerald-400/20 bg-emerald-400/[0.05]"
+              }`}>
+                <CheckCircle2 size={14} className={isTerminalSelected ? "text-[#22d3ee]" : "text-emerald-400"} />
+                <span className={`text-xs font-medium ${isTerminalSelected ? "text-[#22d3ee]" : "text-emerald-300"}`}>
+                  {isTerminalSelected
+                    ? "Official Bus Hub selected"
+                    : `${direction === "outbound" ? "Get Off point" : "Pickup"} confirmed at ${customCoords[0].toFixed(5)}, ${customCoords[1].toFixed(5)}`
+                  }
                 </span>
                 <button
-                  onClick={() => setCustomCoords(null)}
+                  onClick={() => { setCustomCoords(null); setIsTerminalSelected(false); }}
                   className="ml-auto text-[10px] text-[#a7b0c0] hover:text-white underline"
                 >
                   Clear
@@ -421,10 +450,16 @@ export default function Book() {
                   </span>
                 </div>
 
+                {/* Label changes to "Get Off" when student is leaving campus (outbound) */}
                 <div className="flex justify-between items-center py-2.5">
-                  <span className="text-sm text-[#a7b0c0]">Pickup</span>
-                  <span className={`text-sm font-medium text-right max-w-[140px] ${customCoords ? "text-emerald-400" : "text-amber-400/80"}`}>
-                    {customCoords ? "Custom (on-route)" : "Select on map →"}
+                  <span className="text-sm text-[#a7b0c0]">
+                    {direction === "outbound" ? "Get Off" : "Pickup"}
+                  </span>
+                  <span className={`text-sm font-medium text-right max-w-[140px] ${customCoords ? (isTerminalSelected ? "text-[#22d3ee]" : "text-emerald-400") : "text-amber-400/80"}`}>
+                    {customCoords
+                      ? isTerminalSelected ? "Official Station" : "Custom (on-route)"
+                      : "Select on map →"
+                    }
                   </span>
                 </div>
 

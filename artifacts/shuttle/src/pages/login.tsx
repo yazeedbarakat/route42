@@ -3,9 +3,12 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useLogin, useRegister } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
-import { Bus, Mail, Lock, User, ChevronRight, Loader2 } from "lucide-react";
+import { Bus, Mail, Lock, User, ChevronRight, Loader2, Phone } from "lucide-react";
 
 type UserRole = "student" | "admin" | "driver";
+
+// Only @learner.42.tech addresses are accepted for student registration
+const STUDENT_EMAIL_DOMAIN = "@learner.42.tech";
 
 export default function Login() {
   const { user, setToken } = useAuth();
@@ -16,7 +19,9 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [role, setRole] = useState<UserRole>("student");
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const loginMutation = useLogin();
   const registerMutation = useRegister();
@@ -29,11 +34,37 @@ export default function Login() {
     }
   }, [user, setLocation]);
 
+  // Validate email domain when registering as a student
+  const validateEmail = (value: string, currentRole: UserRole) => {
+    if (isRegistering && currentRole === "student") {
+      if (!value.endsWith(STUDENT_EMAIL_DOMAIN)) {
+        setEmailError(`Only ${STUDENT_EMAIL_DOMAIN} email addresses are allowed.`);
+        return false;
+      }
+    }
+    setEmailError(null);
+    return true;
+  };
+
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    if (isRegistering) validateEmail(value, role);
+  };
+
+  const handleRoleChange = (newRole: UserRole) => {
+    setRole(newRole);
+    if (isRegistering) validateEmail(email, newRole);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Re-run email validation before submitting
+    if (isRegistering && !validateEmail(email, role)) return;
     try {
       if (isRegistering) {
-        const res = await registerMutation.mutateAsync({ data: { email, password, name, role } });
+        const res = await registerMutation.mutateAsync({
+          data: { email, password, name, role, phone: phone || undefined },
+        });
         setToken(res.token);
         toast({ title: "Welcome!", description: "Account created successfully." });
       } else {
@@ -102,11 +133,21 @@ export default function Login() {
                   type="email"
                   required
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg pl-9 pr-4 py-2.5 text-white placeholder-[#a7b0c0]/50 text-sm focus:outline-none focus:border-[#ff2e88]/60 focus:bg-white/[0.08] transition-all"
-                  placeholder="you@42irbid.edu"
+                  onChange={(e) => handleEmailChange(e.target.value)}
+                  className={`w-full bg-white/[0.05] border rounded-lg pl-9 pr-4 py-2.5 text-white placeholder-[#a7b0c0]/50 text-sm focus:outline-none focus:bg-white/[0.08] transition-all ${
+                    emailError ? "border-red-500/60 focus:border-red-500/80" : "border-white/[0.08] focus:border-[#ff2e88]/60"
+                  }`}
+                  placeholder={isRegistering && role === "student" ? "you@learner.42.tech" : "you@42irbid.edu"}
                 />
               </div>
+              {/* Email domain validation error */}
+              {emailError && (
+                <p className="text-xs text-red-400 mt-1">{emailError}</p>
+              )}
+              {/* Domain hint for student registration */}
+              {isRegistering && role === "student" && !emailError && (
+                <p className="text-[11px] text-[#a7b0c0]/70 mt-1">Only @learner.42.tech addresses are accepted.</p>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -126,10 +167,28 @@ export default function Login() {
 
             {isRegistering && (
               <div className="space-y-1.5">
+                {/* Phone number — required at registration */}
+                <label className="text-sm font-medium text-[#a7b0c0]">Phone Number</label>
+                <div className="relative">
+                  <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a7b0c0]" />
+                  <input
+                    type="tel"
+                    required
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg pl-9 pr-4 py-2.5 text-white placeholder-[#a7b0c0]/50 text-sm focus:outline-none focus:border-[#ff2e88]/60 focus:bg-white/[0.08] transition-all"
+                    placeholder="+962 7X XXX XXXX"
+                  />
+                </div>
+              </div>
+            )}
+
+            {isRegistering && (
+              <div className="space-y-1.5">
                 <label className="text-sm font-medium text-[#a7b0c0]">Role</label>
                 <select
                   value={role}
-                  onChange={(e) => setRole(e.target.value as UserRole)}
+                  onChange={(e) => handleRoleChange(e.target.value as UserRole)}
                   className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:border-[#ff2e88]/60 focus:bg-white/[0.08] transition-all"
                 >
                   <option value="student" className="bg-[#0f1420]">Student</option>

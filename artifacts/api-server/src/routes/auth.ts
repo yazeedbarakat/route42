@@ -48,7 +48,8 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
-  const { name, email, password, role } = parsed.data;
+  // Extract phone separately — it passes through the Zod schema as optional
+  const { name, email, password, role, phone } = parsed.data;
 
   const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
   if (existing) {
@@ -59,7 +60,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   const passwordHash = await bcrypt.hash(password, 10);
   const [user] = await db
     .insert(usersTable)
-    .values({ name, email, passwordHash, role: role ?? "student" })
+    .values({ name, email, passwordHash, role: role ?? "student", phone: phone ?? null })
     .returning();
 
   const token = signToken({ userId: user.id, role: user.role, email: user.email });

@@ -12,4 +12,6 @@ export interface RegisterBody {
   email: string;
   password: string;
   role?: RegisterBodyRole;
+  /** Optional phone number collected at registration */
+  phone?: string;
 }

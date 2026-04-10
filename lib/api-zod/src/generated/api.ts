@@ -46,6 +46,8 @@ export const RegisterBody = zod.object({
   role: zod
     .enum(["student", "admin", "driver"])
     .default(registerBodyRoleDefault),
+  // Phone number — optional at schema level, validated in UI
+  phone: zod.string().optional(),
 });
 
 /**

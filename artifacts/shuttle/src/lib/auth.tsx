@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { useGetMe, setAuthTokenGetter } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 
 export interface UserData {
   id: number;
@@ -42,6 +43,8 @@ function useTokenState() {
 }
 
 function AuthProviderInner({ children, token, setToken }: { children: ReactNode; token: string | null; setToken: (t: string | null) => void }) {
+  const queryClient = useQueryClient();
+
   const { data: user, isLoading, error } = useGetMe({
     query: {
       enabled: !!token,
@@ -56,6 +59,9 @@ function AuthProviderInner({ children, token, setToken }: { children: ReactNode;
   }, [error]);
 
   const logout = () => {
+    // Clear all cached query data so stale user data doesn't persist
+    // after the token is removed — fixes the sign-out redirect loop.
+    queryClient.clear();
     setToken(null);
   };
 

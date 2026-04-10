@@ -1,0 +1,51 @@
+Update the existing project files in this Repl to implement the following feature updates and bug fix. Work directly on the current codebase and preserve the existing project structure and styling unless a change is required.
+
+## 1) Registration Form and Validation
+
+* In the registration form and its related validation logic, add a new required field: **Phone Number**.
+* Update email validation so that only email addresses ending with **@learner.42.tech** are accepted.
+* If the email uses any other domain, show a clear validation error message such as:
+
+  * `"Only @learner.42.tech email addresses are allowed."`
+
+## 2) Conditional UI Text for Trip Direction
+
+* In the trip booking logic, when the trip direction indicates that the student is **leaving the 42 campus and going home**, change the relevant action label/button text from:
+
+  * `"Pickup"`
+  * to `"Get Off"`
+* Keep `"Pickup"` for all other cases where the student is being picked up to go to campus.
+
+## 3) Bus Hub Selection Rule
+
+* In the location/map selection component, detect when the user clicks or selects an **official Bus Hub / Station**.
+* When an official station is selected:
+
+  * disable or hide the **"Custom Pickup"** option
+  * allow only the standard station selection flow
+* When the selected location is not an official station, the **"Custom Pickup"** option should remain available as normal.
+
+## 4) Fix Sign Out Bug
+
+* Investigate and fix the current **Sign Out** functionality.
+* Ensure that clicking **Sign Out**:
+
+  * properly clears the authentication session, token, or stored auth state
+  * updates the authentication state in the app correctly
+  * redirects the user to the **login page**
+* Make sure the fix is compatible with the project’s existing authentication system and state management.
+
+## Implementation Notes
+
+* Modify the existing files directly.
+* Add concise code comments explaining the changes made for each requirement.
+* Do not rewrite unrelated parts of the app.
+* Preserve existing functionality unless it conflicts with the requested changes.
+
+## Deliverables
+
+After making the changes, provide:
+
+1. A short summary of the files modified
+2. A summary of what was changed in each file
+3. Confirmation that the Sign Out flow was tested logically against the current auth implementation
