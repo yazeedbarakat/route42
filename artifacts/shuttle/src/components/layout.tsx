@@ -4,9 +4,28 @@ import { useGetNotifications } from "@workspace/api-client-react";
 import { 
   LayoutDashboard, CalendarPlus, History, Map, 
   Settings, BookOpen, Truck, Bell, LogOut, 
-  ChevronRight, Menu, X, Bus
+  ChevronRight, Menu, X
 } from "lucide-react";
+
 import { useState } from "react";
+
+function FortyTwoIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="42">
+      <text
+        x="50%"
+        y="50%"
+        dominantBaseline="central"
+        textAnchor="middle"
+        fill="white"
+        fontFamily="Inter, ui-sans-serif, system-ui, sans-serif"
+        fontWeight="800"
+        fontSize="11"
+        letterSpacing="-0.5"
+      >42</text>
+    </svg>
+  );
+}
 
 const NAV_LINKS = {
   student: [
@@ -68,9 +87,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </button>
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-md bg-gradient-to-br from-[#ff2e88] to-[#7c3aed] flex items-center justify-center">
-            <Bus size={14} className="text-white" />
+            <FortyTwoIcon size={14} />
           </div>
-          <span className="font-semibold text-sm text-white">Smart Shuttle</span>
+          <span className="font-semibold text-sm text-white">42 transportation</span>
         </div>
         <Link href="/notifications" className="relative p-2 rounded-lg hover:bg-white/[0.05] transition-colors">
           <Bell size={20} className="text-white/70" />
@@ -102,10 +121,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="flex items-center justify-between px-5 h-16 border-b border-white/[0.06]">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#ff2e88] to-[#7c3aed] flex items-center justify-center shadow-lg glow-pink">
-              <Bus size={16} className="text-white" />
+              <FortyTwoIcon size={16} />
             </div>
             <div>
-              <div className="text-sm font-bold text-white leading-none">Smart Shuttle</div>
+              <div className="text-sm font-bold text-white leading-none">42 transportation</div>
               <div className="text-[10px] text-[#a7b0c0] mt-0.5">42 Irbid</div>
             </div>
           </div>
