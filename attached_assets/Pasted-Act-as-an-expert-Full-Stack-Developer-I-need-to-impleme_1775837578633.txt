@@ -1,0 +1,23 @@
+Act as an expert Full-Stack Developer. I need to implement Dynamic Routing and Role-Specific restrictions for the Driver's map view in the `InteractiveMap.jsx` component of my "Smart Shuttle Solution".
+
+**Task 1: Disable Map Click for Drivers**
+* Locate the map click event handler (likely using `useMapEvents` for custom pickups).
+* Add a strict condition: If `userRole === 'driver'`, the click handler should do absolutely NOTHING. Drivers cannot create or request custom pickup points.
+
+**Task 2: Dynamic Route Generation (Skip Empty Stops)**
+* Do NOT use the hardcoded list of all terminals for the driver's route.
+* Extract unique pickup coordinates from the `bookings` array passed to the driver's map.
+* If a specific terminal or area has NO bookings, it MUST be completely excluded from the routing calculation.
+
+**Task 3: Farthest-Point First Routing Logic**
+* To ensure the route makes logical sense, calculate the straight-line distance of every booked coordinate relative to the Final Destination (42 Irbid Campus: `[32.504227, 35.871188]`).
+* Sort the unique booked coordinates so that the FARTHEST point is first in the array.
+* Construct the final waypoints array: `[Farthest Booked Point, ...Remaining Booked Points, 42 Irbid]`.
+* Pass this dynamically generated array to the OSRM Trip API (`source=first&destination=last`) so it draws the shortest valid path starting from the furthest student and ending at 42.
+
+**Task 4: Driver UI/UX Clarity & Clustering**
+* **Auto-Zoom/Bounds:** After fetching the OSRM route, use Leaflet's `map.fitBounds(polyline.getBounds())` (or equivalent React-Leaflet hook) to automatically zoom and center the map so the entire dynamic route is perfectly visible to the driver.
+* **Marker Grouping:** If multiple students have the exact same pickup coordinates (e.g., 3 students at Al-Ghour Terminal), do NOT render 3 overlapping markers. Render ONE distinct driver marker that displays a badge or tooltip saying: "3 Passengers here".
+* Maintain the "42 Intranet V2" dark UI theme.
+
+Please provide the updated `InteractiveMap.jsx` component focusing on these dynamic driver-specific routing and rendering logic.

@@ -4,7 +4,9 @@
  * Modes:
  *  - standalone (map page)  : full bus animation + ETA callbacks + internal custom pickup state
  *  - booking embed           : onLocationSelect prop → valid click lifts coords to parent
- *  - admin / driver embed    : customBookings prop → orange markers for student custom pickups
+ *  - admin embed             : customBookings prop → orange markers for student custom pickups
+ *  - driver embed            : userRole="driver" → dynamic OSRM route from booked coords,
+ *                              clustered markers, auto-fitBounds, no click handler
  */
 import { useEffect, useRef, useState, useCallback } from "react";
 import "leaflet/dist/leaflet.css";
@@ -26,7 +28,7 @@ export interface RouteMapProps {
   onLocationSelect?: (coords: [number, number]) => void;
   /** Green marker at these coords (controlled from parent for booking embed) */
   selectedCoords?: [number, number] | null;
-  /** Orange markers shown for admin / driver views */
+  /** Orange markers / driver-mode clustered markers */
   customBookings?: CustomBooking[];
   /** Enable animated bus (default true) */
   showBus?: boolean;
@@ -34,6 +36,14 @@ export interface RouteMapProps {
   onBusMoved?: (busIdx: number, totalSteps: number, stopIndices: number[]) => void;
   /** Called when a predefined terminal marker is clicked — lifts coords to parent */
   onTerminalClick?: (coords: [number, number]) => void;
+  /**
+   * When "driver":
+   *  - click handler is disabled
+   *  - route is dynamically generated from customBookings coords (farthest-first)
+   *  - markers are clustered by coords
+   *  - map auto-fits to route bounds
+   */
+  userRole?: string;
 }
 
 // ─── Terminals & Route ────────────────────────────────────────────────────────
@@ -47,7 +57,7 @@ export const TERMINALS = [
 
 export const DESTINATION = { name: "42 Irbid", lat: 32.50422734122801, lng: 35.8711883498439 };
 
-// All waypoints for the OSRM Trip API (lng,lat order), source=first, destination=last
+// Static waypoints for the standard (non-driver) OSRM Trip API call
 const ALL_WAYPOINTS = [
   ...TERMINALS.map(t => `${t.lng},${t.lat}`),
   `${DESTINATION.lng},${DESTINATION.lat}`,
@@ -59,6 +69,52 @@ const OSRM_TRIP_URL =
 
 const FALLBACK: [number, number][] = TERMINALS.map(t => [t.lat, t.lng] as [number, number])
   .concat([[DESTINATION.lat, DESTINATION.lng]]);
+
+// ─── Driver routing helpers ────────────────────────────────────────────────────
+/** Haversine straight-line distance in degrees (fast proxy — good enough for sorting) */
+function straightLineDist(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const dlat = lat1 - lat2, dlng = lng1 - lng2;
+  return Math.sqrt(dlat * dlat + dlng * dlng);
+}
+
+/**
+ * Given a list of CustomBooking entries:
+ *  1. Deduplicate by (lat, lng) — group passengers sharing the same coords
+ *  2. Sort so the point farthest from DESTINATION is first
+ *  3. Return unique [lat, lng] pairs in farthest-first order, ending with destination
+ */
+function buildDriverWaypoints(bookings: CustomBooking[]): {
+  uniqueCoords: { lat: number; lng: number; count: number }[];
+  osrmWaypointStr: string;
+} {
+  // Group by rounded coords to handle floating-point near-duplication
+  const groups = new Map<string, { lat: number; lng: number; count: number }>();
+  for (const b of bookings) {
+    const key = `${b.lat.toFixed(5)},${b.lng.toFixed(5)}`;
+    if (groups.has(key)) {
+      groups.get(key)!.count++;
+    } else {
+      groups.set(key, { lat: b.lat, lng: b.lng, count: 1 });
+    }
+  }
+
+  const unique = Array.from(groups.values());
+
+  // Sort farthest from destination first
+  unique.sort((a, b) => {
+    const da = straightLineDist(a.lat, a.lng, DESTINATION.lat, DESTINATION.lng);
+    const db = straightLineDist(b.lat, b.lng, DESTINATION.lat, DESTINATION.lng);
+    return db - da; // descending — farthest first
+  });
+
+  // Build OSRM waypoint string: unique points + destination last
+  const parts = [
+    ...unique.map(c => `${c.lng},${c.lat}`),
+    `${DESTINATION.lng},${DESTINATION.lat}`,
+  ];
+
+  return { uniqueCoords: unique, osrmWaypointStr: parts.join(";") };
+}
 
 // ─── Geometry ─────────────────────────────────────────────────────────────────
 function interp(pts: [number, number][], steps = 3): [number, number][] {
@@ -149,6 +205,26 @@ function orangeMarkerIcon() {
   });
 }
 
+/** Driver clustered stop marker — orange with a passenger-count badge */
+function driverStopIcon(count: number, order: number) {
+  const badge = count > 1
+    ? `<div style="position:absolute;top:-8px;right:-8px;min-width:18px;height:18px;background:#ff2e88;border:1.5px solid rgba(255,255,255,.8);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;padding:0 4px;box-shadow:0 0 8px rgba(255,46,136,.7);">${count}</div>`
+    : "";
+  const label = `<div style="position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:10px;font-weight:600;color:#fb923c;background:#0d1420cc;border:1px solid rgba(251,146,60,.3);border-radius:5px;padding:1px 5px;">${order}</div>`;
+  return L.divIcon({
+    className: "",
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -18],
+    html: `${RIPPLE}<div style="position:relative;width:28px;height:28px;display:flex;align-items:center;justify-content:center;">
+      <div style="position:absolute;width:38px;height:38px;background:rgba(251,146,60,.15);border-radius:50%;animation:rm-ripple 2.2s ease-out infinite;"></div>
+      <div style="width:20px;height:20px;background:#fb923c;border:2px solid rgba(255,255,255,.8);border-radius:50%;box-shadow:0 0 12px rgba(251,146,60,.9),0 0 22px rgba(251,146,60,.5);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;">${order}</div>
+      ${badge}
+      ${label}
+    </div>`,
+  });
+}
+
 // ─── Styles (dark popups + hover tooltips) ────────────────────────────────────
 const POPUP_CSS = `
 .rm-popup .leaflet-popup-content-wrapper{background:transparent!important;border:none!important;box-shadow:none!important;padding:0!important;}
@@ -171,6 +247,17 @@ const POPUP_CSS = `
 `;
 
 // ─── Child Components ─────────────────────────────────────────────────────────
+
+/** Auto-fit map to a polyline's bounds after the driver route is loaded */
+function FitBoundsToRoute({ routePoints }: { routePoints: [number, number][] }) {
+  const map = useMap();
+  useEffect(() => {
+    if (routePoints.length < 2) return;
+    const bounds = L.latLngBounds(routePoints.map(([lat, lng]) => L.latLng(lat, lng)));
+    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: true });
+  }, [map, routePoints]);
+  return null;
+}
 
 function BusAnimator({
   routePoints,
@@ -300,6 +387,7 @@ function PickupMarker({ position }: { position: [number, number] | null }) {
   return null;
 }
 
+/** Admin/student view — one orange marker per booking (may overlap) */
 function CustomBookingsLayer({ bookings }: { bookings: CustomBooking[] }) {
   const map = useMap();
   const refs = useRef<L.Marker[]>([]);
@@ -328,7 +416,72 @@ function CustomBookingsLayer({ bookings }: { bookings: CustomBooking[] }) {
   return null;
 }
 
-const ON_ROUTE_THRESHOLD = 0.0005; // ~55 m
+/**
+ * Driver-mode clustered markers:
+ *  - Grouped by unique coordinate
+ *  - Numbered in route order (1 = farthest / first stop)
+ *  - Badge shows passenger count when > 1
+ *  - Popup lists all students at that stop
+ */
+function DriverClusteredMarkers({
+  clusters,
+}: {
+  clusters: { lat: number; lng: number; count: number; names: string[] }[];
+}) {
+  const map = useMap();
+  const refs = useRef<L.Marker[]>([]);
+
+  useEffect(() => {
+    refs.current.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
+    refs.current = [];
+
+    // Destination marker
+    const dm = L.marker([DESTINATION.lat, DESTINATION.lng], { icon: destIcon(), zIndexOffset: 600 }).addTo(map);
+    dm.bindPopup(
+      `<div style="font-family:Inter,sans-serif;background:#0f1420;border:1px solid rgba(255,46,136,.3);border-radius:12px;padding:12px 16px;">
+        <div style="color:#ff2e88;font-weight:700;font-size:14px;">🎯 42 Irbid</div>
+        <div style="color:#a7b0c0;font-size:11px;margin-top:4px;">Final Destination</div>
+      </div>`,
+      { className: "rm-popup", closeButton: false }
+    );
+    refs.current.push(dm);
+
+    clusters.forEach((c, i) => {
+      const order = i + 1;
+      const m = L.marker([c.lat, c.lng], {
+        icon: driverStopIcon(c.count, order),
+        zIndexOffset: 700,
+      }).addTo(map);
+
+      const passengerList = c.names
+        .map(n => `<div style="color:#fff;font-size:12px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.05);">👤 ${n}</div>`)
+        .join("");
+
+      m.bindPopup(
+        `<div style="font-family:Inter,sans-serif;background:#0f1420;border:1px solid rgba(251,146,60,.35);border-radius:12px;padding:12px 16px;min-width:180px;">
+          <div style="color:#fb923c;font-weight:700;font-size:13px;margin-bottom:2px;">🛑 Stop ${order}</div>
+          <div style="color:#a7b0c0;font-size:11px;margin-bottom:8px;">${c.count} passenger${c.count > 1 ? "s" : ""} here</div>
+          ${passengerList}
+          <div style="color:#a7b0c0;font-size:10px;margin-top:8px;font-family:monospace;">${c.lat.toFixed(5)}, ${c.lng.toFixed(5)}</div>
+        </div>`,
+        { className: "rm-popup", closeButton: false }
+      );
+
+      m.bindTooltip(
+        `Stop ${order} · ${c.count} passenger${c.count > 1 ? "s" : ""}`,
+        { direction: "top", offset: [0, -16], className: "rm-tooltip" }
+      );
+
+      refs.current.push(m);
+    });
+
+    return () => { refs.current.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); }); };
+  }, [map, clusters]);
+
+  return null;
+}
+
+const ON_ROUTE_THRESHOLD = 0.0005;
 
 function ClickHandler({
   routePoints,
@@ -362,7 +515,10 @@ export function RouteMap({
   showBus = true,
   onBusMoved,
   onTerminalClick,
+  userRole,
 }: RouteMapProps) {
+  const isDriver = userRole === "driver";
+
   const [routePoints, setRoutePoints] = useState<[number, number][]>([]);
   const [stopIndices, setStopIndices] = useState<number[]>(TERMINALS.map(() => 0));
   const [loading, setLoading]         = useState(true);
@@ -379,14 +535,48 @@ export function RouteMap({
     return () => clearTimeout(t);
   }, [toast]);
 
-  // OSRM Trip API fetch — finds the optimal shortest path through all waypoints
+  // ── Build driver-mode clusters ───────────────────────────────────────────
+  const driverClusters = (() => {
+    if (!isDriver || !customBookings || customBookings.length === 0) return [];
+    // Build groups preserving farthest-first sorted order
+    const { uniqueCoords } = buildDriverWaypoints(customBookings);
+    // Map names from bookings back to each unique coord
+    return uniqueCoords.map(c => {
+      const key = `${c.lat.toFixed(5)},${c.lng.toFixed(5)}`;
+      const names = customBookings
+        .filter(b => `${b.lat.toFixed(5)},${b.lng.toFixed(5)}` === key)
+        .map(b => b.studentName);
+      return { lat: c.lat, lng: c.lng, count: c.count, names };
+    });
+  })();
+
+  // ── OSRM fetch ───────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
-    fetch(OSRM_TRIP_URL)
+
+    // For driver mode with bookings: dynamic route from booked coords
+    // For all other modes: standard full-terminal route
+    let url: string;
+    let fallbackPts: [number, number][];
+
+    if (isDriver && customBookings && customBookings.length > 0) {
+      const { uniqueCoords, osrmWaypointStr } = buildDriverWaypoints(customBookings);
+      url =
+        `https://router.project-osrm.org/trip/v1/driving/${osrmWaypointStr}` +
+        `?roundtrip=false&source=first&destination=last&geometries=geojson&overview=full`;
+      fallbackPts = [
+        ...uniqueCoords.map(c => [c.lat, c.lng] as [number, number]),
+        [DESTINATION.lat, DESTINATION.lng],
+      ];
+    } else {
+      url = OSRM_TRIP_URL;
+      fallbackPts = FALLBACK;
+    }
+
+    fetch(url)
       .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(data => {
         if (cancelled) return;
-        // Trip API returns data.trips[0]
         const tripData = data.trips?.[0] ?? data.routes?.[0];
         if (!tripData) throw new Error("No trip data");
         const raw: [number, number][] = tripData.geometry.coordinates.map(
@@ -394,18 +584,25 @@ export function RouteMap({
         );
         const pts = interp(raw, 3);
         setRoutePoints(pts);
-        setStopIndices(TERMINALS.map(t => closestIdx(t.lat, t.lng, pts)));
+        if (!isDriver) {
+          setStopIndices(TERMINALS.map(t => closestIdx(t.lat, t.lng, pts)));
+        }
         setLoading(false);
       })
       .catch(() => {
         if (cancelled) return;
-        const pts = interp(FALLBACK, 70);
+        const pts = interp(fallbackPts, 70);
         setRoutePoints(pts);
-        setStopIndices(TERMINALS.map(t => closestIdx(t.lat, t.lng, pts)));
+        if (!isDriver) {
+          setStopIndices(TERMINALS.map(t => closestIdx(t.lat, t.lng, pts)));
+        }
         setLoading(false);
       });
+
     return () => { cancelled = true; };
-  }, []);
+  // Re-fetch when bookings change (driver switches trips)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDriver, JSON.stringify(customBookings?.map(b => `${b.lat},${b.lng}`))]);
 
   const handleBusMove = useCallback((idx: number) => {
     setBusIdx(idx);
@@ -435,7 +632,9 @@ export function RouteMap({
       {loading && (
         <div className="absolute inset-0 z-[1001] flex flex-col items-center justify-center bg-[#0a0e17]/85 backdrop-blur-sm gap-3">
           <Loader2 size={28} className="text-[#ff2e88] animate-spin" />
-          <p className="text-white text-sm font-medium">Optimising route via OSRM Trip API…</p>
+          <p className="text-white text-sm font-medium">
+            {isDriver ? "Building dynamic route…" : "Optimising route via OSRM Trip API…"}
+          </p>
           <p className="text-[#a7b0c0] text-xs">router.project-osrm.org</p>
         </div>
       )}
@@ -470,7 +669,12 @@ export function RouteMap({
           </>
         )}
 
-        {routePoints.length > 0 && (
+        {/* Auto-zoom to route for driver */}
+        {isDriver && routePoints.length > 0 && (
+          <FitBoundsToRoute routePoints={routePoints} />
+        )}
+
+        {routePoints.length > 0 && !isDriver && (
           <>
             {showBus && (
               <BusAnimator key={routePoints.length} routePoints={routePoints} onMove={handleBusMove} />
@@ -485,13 +689,20 @@ export function RouteMap({
           </>
         )}
 
-        <PickupMarker position={effectivePickup ?? null} />
+        {/* Driver: clustered stop markers */}
+        {isDriver && driverClusters.length > 0 && (
+          <DriverClusteredMarkers clusters={driverClusters} />
+        )}
 
-        {customBookings && customBookings.length > 0 && (
+        {/* Non-driver: custom booking markers */}
+        {!isDriver && customBookings && customBookings.length > 0 && (
           <CustomBookingsLayer bookings={customBookings} />
         )}
 
-        {routePoints.length > 0 && (
+        <PickupMarker position={effectivePickup ?? null} />
+
+        {/* Click handler: disabled for drivers */}
+        {!isDriver && routePoints.length > 0 && (
           <ClickHandler routePoints={routePoints} onValid={handleValidClick} onInvalid={handleInvalidClick} />
         )}
       </MapContainer>

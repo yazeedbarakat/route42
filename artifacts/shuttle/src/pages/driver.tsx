@@ -370,11 +370,11 @@ function TripCard({
                 ))}
               </div>
               <div className="border-t border-white/[0.06]">
-                <RouteMap height="360px" showBus={false} customBookings={customMarkers} />
+                <RouteMap height="360px" showBus={false} customBookings={customMarkers} userRole="driver" />
               </div>
               <div className="px-5 py-2.5 border-t border-white/[0.06] bg-[#fb923c]/[0.03]">
                 <p className="text-xs text-[#a7b0c0]">
-                  <span className="text-[#fb923c] font-medium">🟠 Orange markers</span> = custom on-route pickups · Click for passenger details
+                  <span className="text-[#fb923c] font-medium">🟠 Numbered stops</span> = farthest-first route order · badge = passenger count · click for names
                 </p>
               </div>
             </>
