@@ -2,7 +2,7 @@ import { customFetch } from "@workspace/api-client-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { format, addDays } from "date-fns";
 import {
   Truck, Users, MapPin, Clock, Moon, Map,
@@ -10,7 +10,7 @@ import {
   UserCheck, AlertTriangle, Navigation, RefreshCw,
   Phone, Play, BarChart3, Zap, TrendingUp, CalendarDays,
 } from "lucide-react";
-import { RouteMap, type CustomBooking } from "@/components/route-map";
+import { RouteMap, type CustomBooking, type DriverProgressInfo } from "@/components/route-map";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Passenger {
@@ -168,6 +168,27 @@ function TripCard({
   const qc = useQueryClient();
   const [expanded, setExpanded] = useState(false);
   const [showMap, setShowMap] = useState(false);
+  const [driverStatus, setDriverStatus] = useState<{
+    nextStopName: string;
+    nextStopOrder: number;
+    passedStops: number;
+    totalStops: number;
+    passedPassengers: number;
+    totalPassengers: number;
+    progress: number;
+  } | null>(null);
+
+  const handleDriverProgress = useCallback((info: DriverProgressInfo) => {
+    setDriverStatus({
+      nextStopName:      info.nextStopName,
+      nextStopOrder:     info.nextStopOrder,
+      passedStops:       info.passedStops,
+      totalStops:        info.totalStops,
+      passedPassengers:  info.passedPassengers,
+      totalPassengers:   info.totalPassengers,
+      progress:          info.totalPts > 0 ? Math.round((info.busIdx / info.totalPts) * 100) : 0,
+    });
+  }, []);
 
   const acceptMut = useMutation({
     mutationFn: () => acceptTrip(trip.id),
@@ -358,23 +379,81 @@ function TripCard({
 
           {showMap && (
             <>
-              <div className="border-t border-white/[0.06] px-5 py-3 grid grid-cols-2 gap-2">
-                {customMarkers.map((b, i) => (
-                  <div key={i} className="flex items-center gap-2 p-2.5 rounded-lg bg-[#fb923c]/[0.06] border border-[#fb923c]/15">
-                    <div className="w-2 h-2 rounded-full bg-[#fb923c] shadow-[0_0_6px_rgba(251,146,60,0.8)] shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-white leading-tight truncate">{b.studentName}</p>
-                      <p className="text-[10px] font-mono text-[#a7b0c0]">{b.lat.toFixed(4)}, {b.lng.toFixed(4)}</p>
+              {/* ── Driver Status Panel ── */}
+              {isStarted && driverStatus ? (
+                <div className="border-t border-white/[0.06] bg-gradient-to-r from-[#22d3ee]/[0.06] to-[#22c55e]/[0.04] px-5 py-4">
+                  {/* Next stop banner */}
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2 h-2 rounded-full bg-[#22c55e] shadow-[0_0_8px_rgba(34,197,94,0.9)] animate-pulse shrink-0" />
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-[#22c55e]">Trip Active</span>
+                  </div>
+                  <div className="bg-[#22d3ee]/[0.08] border border-[#22d3ee]/20 rounded-xl px-4 py-3 mb-3">
+                    <p className="text-[10px] text-[#a7b0c0] uppercase tracking-wider mb-0.5">Next Stop</p>
+                    <p className="text-lg font-bold text-white leading-tight">{driverStatus.nextStopName}</p>
+                  </div>
+                  {/* Counters row */}
+                  <div className="grid grid-cols-3 gap-2 mb-3">
+                    <div className="bg-white/[0.04] rounded-lg px-3 py-2 text-center border border-white/[0.06]">
+                      <p className="text-[10px] text-[#a7b0c0] leading-none mb-1">Stops Done</p>
+                      <p className="text-base font-bold font-mono text-[#22d3ee]">{driverStatus.passedStops}<span className="text-xs text-[#a7b0c0] font-normal">/{driverStatus.totalStops}</span></p>
+                    </div>
+                    <div className="bg-white/[0.04] rounded-lg px-3 py-2 text-center border border-white/[0.06]">
+                      <p className="text-[10px] text-[#a7b0c0] leading-none mb-1">On Board</p>
+                      <p className="text-base font-bold font-mono text-[#ff2e88]">{driverStatus.passedPassengers}<span className="text-xs text-[#a7b0c0] font-normal">/{driverStatus.totalPassengers}</span></p>
+                    </div>
+                    <div className="bg-white/[0.04] rounded-lg px-3 py-2 text-center border border-white/[0.06]">
+                      <p className="text-[10px] text-[#a7b0c0] leading-none mb-1">Route</p>
+                      <p className="text-base font-bold font-mono text-[#facc15]">{driverStatus.progress}%</p>
                     </div>
                   </div>
-                ))}
-              </div>
+                  {/* Progress bar */}
+                  <div className="w-full h-1.5 bg-white/[0.08] rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{
+                        width: `${driverStatus.progress}%`,
+                        background: "linear-gradient(90deg, #22d3ee, #22c55e)",
+                        boxShadow: "0 0 8px rgba(34,211,238,0.6)",
+                      }}
+                    />
+                  </div>
+                </div>
+              ) : isStarted ? (
+                <div className="border-t border-white/[0.06] px-5 py-3 flex items-center gap-2">
+                  <div className="w-3 h-3 border-2 border-[#22d3ee]/40 border-t-[#22d3ee] rounded-full animate-spin" />
+                  <span className="text-xs text-[#22d3ee]">Loading route…</span>
+                </div>
+              ) : (
+                <div className="border-t border-white/[0.06] px-5 py-3 grid grid-cols-2 gap-2">
+                  {customMarkers.map((b, i) => (
+                    <div key={i} className="flex items-center gap-2 p-2.5 rounded-lg bg-[#fb923c]/[0.06] border border-[#fb923c]/15">
+                      <div className="w-2 h-2 rounded-full bg-[#fb923c] shadow-[0_0_6px_rgba(251,146,60,0.8)] shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-white leading-tight truncate">{b.studentName}</p>
+                        <p className="text-[10px] font-mono text-[#a7b0c0]">{b.lat.toFixed(4)}, {b.lng.toFixed(4)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* ── Map ── */}
               <div className="border-t border-white/[0.06]">
-                <RouteMap height="360px" showBus={false} customBookings={customMarkers} userRole="driver" />
+                <RouteMap
+                  height="400px"
+                  showBus={false}
+                  customBookings={customMarkers}
+                  userRole="driver"
+                  animateRoute={isStarted}
+                  onDriverProgress={handleDriverProgress}
+                />
               </div>
               <div className="px-5 py-2.5 border-t border-white/[0.06] bg-[#fb923c]/[0.03]">
                 <p className="text-xs text-[#a7b0c0]">
-                  <span className="text-[#fb923c] font-medium">🟠 Numbered stops</span> = farthest-first route order · badge = passenger count · click for names
+                  {isStarted
+                    ? <><span className="text-[#22c55e] font-medium">🟢 Animated route</span> · green trace = path travelled · markers update as stops are reached</>
+                    : <><span className="text-[#fb923c] font-medium">🟠 Numbered stops</span> = farthest-first order · click "Start Trip" to begin navigation animation</>
+                  }
                 </p>
               </div>
             </>

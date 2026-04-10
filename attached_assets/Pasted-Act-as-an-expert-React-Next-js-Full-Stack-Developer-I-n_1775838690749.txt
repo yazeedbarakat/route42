@@ -1,0 +1,28 @@
+Act as an expert React/Next.js Full-Stack Developer. I need to upgrade the Driver's Map component in my "Smart Shuttle Solution" to include a live-tracking animation and a light theme, inspired by modern turn-by-turn navigation apps.
+
+**Task 1: Light Theme Map for Drivers**
+* Inside the map component, implement a conditional TileLayer.
+* If `userRole === 'driver'`, strictly use a Light Theme tile layer (e.g., CartoDB Light: `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png`).
+* If `userRole === 'student'`, keep the existing dark theme.
+
+**Task 2: 'Start Trip' & Route Animation**
+* Add a "Start Trip" button in the driver's UI.
+* When the driver clicks "Start Trip", do NOT just display a static path. Instead, implement a progressive route animation. 
+* You can achieve this by animating a Bus Marker moving along the OSRM polyline coordinates, OR by progressively drawing a bright green Polyline over time using `requestAnimationFrame` or a library like `leaflet-ant-path`.
+* The animation must start from the farthest student pickup point, pass through all intermediate student stops, and end at the 42 Irbid campus.
+
+**Task 3: Dynamic "Next Stop" UI & Counters**
+* Implement a state that tracks the simulated bus's current location.
+* Create a Driver Status Panel above or below the map.
+* As the animated bus reaches a specific waypoint (pickup point), dynamically update a text element saying: "Next Stop: [Name of the next terminal/pickup]".
+* Increment a "Current Passengers" counter as the bus passes each pickup point.
+
+**Task 4: Glowing High-Visibility Markers**
+* For the driver's map, replace default Leaflet markers with custom `L.divIcon`.
+* Use CSS to apply a pulsing, glowing halo effect (e.g., using `box-shadow` and keyframe animations) to the student pickup markers to make them highly visible against the light background.
+
+**Constraints:**
+* All these visual changes, animations, and light themes MUST be strictly isolated to the Driver's view (`if (userRole === 'driver')`).
+* Ensure Leaflet window/document references are handled correctly for Next.js SSR (use Dynamic Imports or `useEffect`).
+
+Please provide the updated React code for the Driver's Map and Dashboard.
