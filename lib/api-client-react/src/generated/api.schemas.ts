@@ -118,7 +118,11 @@ export interface Booking {
 
 export interface CreateBookingBody {
   tripId: number;
-  pickupPointId: number;
+  pickupType: "fixed" | "custom";
+  pickupPointId?: number;
+  pickupName?: string;
+  customLat?: number;
+  customLng?: number;
 }
 
 export type DriverTripDirection =

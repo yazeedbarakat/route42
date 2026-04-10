@@ -115,7 +115,6 @@ export default function Book() {
     if (!selectedTime || !customCoords) return;
     try {
       const tripId = matchedTrip?.id ?? null;
-      const pickupPointId = pickupPoints?.[0]?.id ?? 1;
 
       if (!tripId) {
         toast({ title: "No matching trip", description: "The selected time has no available trip for this date.", variant: "destructive" });
@@ -125,10 +124,9 @@ export default function Book() {
       const result = await createBooking.mutateAsync({
         data: {
           tripId,
-          pickupPointId,
+          pickupType: "custom",
           customLat: customCoords[0],
           customLng: customCoords[1],
-          pickupType: "custom",
         },
       });
 

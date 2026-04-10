@@ -25,7 +25,9 @@ async function sendNotification(userId: number, message: string, type = "booking
 
 async function formatBooking(booking: typeof bookingsTable.$inferSelect) {
   const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, booking.tripId));
-  const [pickupPoint] = await db.select().from(pickupPointsTable).where(eq(pickupPointsTable.id, booking.pickupPointId));
+  const [pickupPoint] = booking.pickupPointId
+    ? await db.select().from(pickupPointsTable).where(eq(pickupPointsTable.id, booking.pickupPointId))
+    : [undefined];
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, booking.userId));
 
   return {
@@ -139,7 +141,7 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const { tripId, pickupPointId } = parsed.data;
+  const { tripId, pickupType, pickupPointId, pickupName, customLat, customLng } = parsed.data;
 
   // Check trip exists
   const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId));
@@ -168,11 +170,25 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  // Check pickup point exists
-  const [pickupPoint] = await db.select().from(pickupPointsTable).where(eq(pickupPointsTable.id, pickupPointId));
-  if (!pickupPoint) {
-    res.status(400).json({ error: "Pickup point not found" });
-    return;
+  // Resolve pickup: for "fixed" validate the DB record; for "custom" accept lat/lng directly
+  let resolvedPickupPointId: number | null = null;
+  if (pickupType === "fixed") {
+    if (!pickupPointId) {
+      res.status(400).json({ error: "pickupPointId is required for fixed pickup" });
+      return;
+    }
+    const [pickupPoint] = await db.select().from(pickupPointsTable).where(eq(pickupPointsTable.id, pickupPointId));
+    if (!pickupPoint) {
+      res.status(400).json({ error: "Pickup point not found" });
+      return;
+    }
+    resolvedPickupPointId = pickupPointId;
+  } else {
+    // custom — coordinates must be provided
+    if (customLat == null || customLng == null) {
+      res.status(400).json({ error: "customLat and customLng are required for custom pickup" });
+      return;
+    }
   }
 
   // Determine status: waiting list if at or over MAX_CAPACITY
@@ -184,7 +200,11 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
     .values({
       userId: req.user!.userId,
       tripId,
-      pickupPointId,
+      pickupPointId: resolvedPickupPointId,
+      pickupType: pickupType ?? "custom",
+      pickupName: pickupName ?? null,
+      customLat: customLat ?? null,
+      customLng: customLng ?? null,
       status: bookingStatus,
     })
     .returning();
