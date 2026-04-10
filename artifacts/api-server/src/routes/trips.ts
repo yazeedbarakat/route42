@@ -264,6 +264,8 @@ router.get("/driver/trips/today", requireAuth, requireRole("driver", "admin"), a
         )
       );
 
+    if (passengers.length === 0) continue;
+
     result.push({
       id: trip.id,
       date: trip.date,

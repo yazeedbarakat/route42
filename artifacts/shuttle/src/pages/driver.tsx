@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import {
   Truck, Users, MapPin, Clock, Moon, Map,
   CheckCircle2, XCircle, ChevronDown, ChevronUp,
-  UserCheck, AlertTriangle, Mail, Navigation,
+  UserCheck, AlertTriangle, Mail, Navigation, RefreshCw,
 } from "lucide-react";
 import { RouteMap, type CustomBooking } from "@/components/route-map";
 
@@ -267,16 +267,16 @@ export default function DriverDashboard() {
     else if (user.role !== "driver") setLocation(user.role === "admin" ? "/admin" : "/dashboard");
   }, [user, setLocation]);
 
-  const { data: trips, isLoading, error } = useQuery({
+  const { data: trips, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["driver", "trips", "today"],
     queryFn: fetchTodayTrips,
     enabled: !!user,
-    refetchInterval: 30_000,
+    refetchInterval: 15_000,
   });
 
   if (!user) return null;
 
-  const activeTrips = trips?.filter(t => t.status !== "canceled") ?? [];
+  const activeTrips = trips?.filter(t => t.status !== "canceled" && t.passengers.length > 0) ?? [];
   const canceledTrips = trips?.filter(t => t.status === "canceled") ?? [];
 
   return (
@@ -284,19 +284,29 @@ export default function DriverDashboard() {
       {/* Header */}
       <div className="bg-gradient-to-br from-emerald-400/10 to-emerald-400/5 border border-emerald-400/20 rounded-2xl p-5">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-400/20 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-emerald-400/20 flex items-center justify-center shrink-0">
             <Truck size={20} className="text-emerald-400" />
           </div>
           <div className="flex-1 min-w-0">
             <h1 className="text-lg font-bold text-white">Driver Dashboard</h1>
             <p className="text-sm text-[#a7b0c0]">{user.name} · {format(new Date(), "EEEE, MMMM d")}</p>
           </div>
-          {trips && (
-            <div className="text-right shrink-0">
-              <p className="text-2xl font-bold font-mono text-white">{activeTrips.length}</p>
-              <p className="text-xs text-[#a7b0c0]">active trips</p>
-            </div>
-          )}
+          <div className="flex items-center gap-3 shrink-0">
+            {trips && (
+              <div className="text-right">
+                <p className="text-2xl font-bold font-mono text-white">{activeTrips.length}</p>
+                <p className="text-xs text-[#a7b0c0]">active trips</p>
+              </div>
+            )}
+            <button
+              onClick={() => refetch()}
+              disabled={isFetching}
+              title="Refresh live data"
+              className="w-9 h-9 rounded-xl bg-[#22d3ee]/10 border border-[#22d3ee]/25 flex items-center justify-center text-[#22d3ee] hover:bg-[#22d3ee]/20 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw size={15} className={isFetching ? "animate-spin" : ""} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -327,8 +337,16 @@ export default function DriverDashboard() {
           <div className="w-16 h-16 rounded-full bg-white/[0.05] flex items-center justify-center mx-auto mb-4">
             <Moon size={28} className="text-[#a7b0c0]" />
           </div>
-          <p className="text-xl font-bold text-white">No Active Routes</p>
-          <p className="text-[#a7b0c0] mt-2">All trips for today are either canceled or not yet booked.</p>
+          <p className="text-xl font-bold text-white">No Active Trips</p>
+          <p className="text-[#a7b0c0] mt-2 max-w-xs mx-auto text-sm">No active trips with passengers scheduled for today.</p>
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching}
+            className="mt-5 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-[#22d3ee]/10 border border-[#22d3ee]/25 text-[#22d3ee] hover:bg-[#22d3ee]/20 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={13} className={isFetching ? "animate-spin" : ""} />
+            Check for new bookings
+          </button>
         </div>
       ) : (
         <div className="space-y-5">
@@ -355,7 +373,7 @@ export default function DriverDashboard() {
       {!isLoading && !error && (
         <p className="text-center text-xs text-[#a7b0c0]/60">
           <CheckCircle2 size={11} className="inline mr-1" />
-          Auto-refreshes every 30 s
+          Auto-refreshes every 15 s · or use the ↻ button for instant update
         </p>
       )}
     </div>
