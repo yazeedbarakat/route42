@@ -12,4 +12,5 @@ export const BookingStatus = {
   pending: "pending",
   confirmed: "confirmed",
   canceled: "canceled",
+  waiting: "waiting",
 } as const;

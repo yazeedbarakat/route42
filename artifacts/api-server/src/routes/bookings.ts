@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, bookingsTable, tripsTable, pickupPointsTable, usersTable, notificationsTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, asc } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import {
   CreateBookingBody,
@@ -10,6 +10,18 @@ import {
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+const MAX_CAPACITY = 15;
+
+// ─── Mock notification sender ────────────────────────────────────────────────
+async function sendNotification(userId: number, message: string, type = "booking_update") {
+  await db.insert(notificationsTable).values({
+    userId,
+    message,
+    type,
+    isRead: false,
+  });
+}
 
 async function formatBooking(booking: typeof bookingsTable.$inferSelect) {
   const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, booking.tripId));
@@ -50,6 +62,42 @@ async function formatBooking(booking: typeof bookingsTable.$inferSelect) {
       createdAt: user.createdAt.toISOString(),
     } : undefined,
   };
+}
+
+// ─── Promote first waiting booking for a trip (FIFO) ─────────────────────────
+async function promoteWaitingBooking(tripId: number) {
+  const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId));
+  if (!trip) return;
+
+  // Find the earliest "waiting" booking for this trip
+  const [firstWaiting] = await db
+    .select()
+    .from(bookingsTable)
+    .where(and(eq(bookingsTable.tripId, tripId), eq(bookingsTable.status, "waiting")))
+    .orderBy(asc(bookingsTable.createdAt))
+    .limit(1);
+
+  if (!firstWaiting) return;
+
+  // Determine promoted status
+  const newStatus = trip.bookedSeats >= trip.minBookingsToConfirm ? "confirmed" : "pending";
+
+  await db
+    .update(bookingsTable)
+    .set({ status: newStatus })
+    .where(eq(bookingsTable.id, firstWaiting.id));
+
+  // Increment seat count
+  await db
+    .update(tripsTable)
+    .set({ bookedSeats: trip.bookedSeats + 1 })
+    .where(eq(tripsTable.id, tripId));
+
+  await sendNotification(
+    firstWaiting.userId,
+    `Your ride is confirmed! A seat opened up for the ${trip.date} ${trip.departureTime} shuttle. You've been moved from the waiting list.`,
+    "booking_update"
+  );
 }
 
 router.get("/bookings", requireAuth, async (req, res): Promise<void> => {
@@ -93,7 +141,7 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
 
   const { tripId, pickupPointId } = parsed.data;
 
-  // Check trip exists and has available seats
+  // Check trip exists
   const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId));
   if (!trip) {
     res.status(400).json({ error: "Trip not found" });
@@ -103,12 +151,8 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Cannot book a canceled trip" });
     return;
   }
-  if (trip.bookedSeats >= trip.totalSeats) {
-    res.status(400).json({ error: "No available seats" });
-    return;
-  }
 
-  // Check if user already booked this trip
+  // Check if user already has an active booking for this trip
   const [existing] = await db
     .select()
     .from(bookingsTable)
@@ -131,54 +175,70 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  // Create booking
+  // Determine status: waiting list if at or over MAX_CAPACITY
+  const isWaiting = trip.bookedSeats >= MAX_CAPACITY;
+  const bookingStatus = isWaiting ? "waiting" : "pending";
+
   const [booking] = await db
     .insert(bookingsTable)
     .values({
       userId: req.user!.userId,
       tripId,
       pickupPointId,
-      status: "pending",
+      status: bookingStatus,
     })
     .returning();
 
-  // Update seat count
-  const newBookedSeats = trip.bookedSeats + 1;
-  await db
-    .update(tripsTable)
-    .set({ bookedSeats: newBookedSeats })
-    .where(eq(tripsTable.id, tripId));
-
-  // Auto-confirm trip if minimum bookings reached
-  if (newBookedSeats >= trip.minBookingsToConfirm && trip.status === "pending") {
+  if (!isWaiting) {
+    // Increment seat count only for active (non-waiting) bookings
+    const newBookedSeats = trip.bookedSeats + 1;
     await db
       .update(tripsTable)
-      .set({ status: "confirmed" })
+      .set({ bookedSeats: newBookedSeats })
       .where(eq(tripsTable.id, tripId));
 
-    // Confirm all pending bookings for this trip
-    const pendingBookings = await db
-      .select()
-      .from(bookingsTable)
-      .where(and(eq(bookingsTable.tripId, tripId), eq(bookingsTable.status, "pending")));
+    // Auto-confirm trip if minimum bookings reached
+    if (newBookedSeats >= trip.minBookingsToConfirm && trip.status === "pending") {
+      await db
+        .update(tripsTable)
+        .set({ status: "confirmed" })
+        .where(eq(tripsTable.id, tripId));
 
-    await db
-      .update(bookingsTable)
-      .set({ status: "confirmed" })
-      .where(and(eq(bookingsTable.tripId, tripId), eq(bookingsTable.status, "pending")));
+      const pendingBookings = await db
+        .select()
+        .from(bookingsTable)
+        .where(and(eq(bookingsTable.tripId, tripId), eq(bookingsTable.status, "pending")));
 
-    // Notify all students
-    for (const pb of pendingBookings) {
-      await db.insert(notificationsTable).values({
-        userId: pb.userId,
-        message: `TRIP CONFIRMED: Your shuttle booking for ${trip.date} at ${trip.departureTime} is now confirmed. Be at your pickup point on time.`,
-        type: "trip_confirmed",
-        isRead: false,
-      });
+      await db
+        .update(bookingsTable)
+        .set({ status: "confirmed" })
+        .where(and(eq(bookingsTable.tripId, tripId), eq(bookingsTable.status, "pending")));
+
+      for (const pb of pendingBookings) {
+        await sendNotification(
+          pb.userId,
+          `TRIP CONFIRMED: Your shuttle booking for ${trip.date} at ${trip.departureTime} is now confirmed. Be at your pickup point on time.`,
+          "trip_confirmed"
+        );
+      }
     }
+
+    if (isWaiting === false && bookingStatus === "pending") {
+      await sendNotification(
+        req.user!.userId,
+        `Booking received for ${trip.date} at ${trip.departureTime}. You're on the list — trip confirms when enough riders join.`,
+        "booking_update"
+      );
+    }
+  } else {
+    // Notify the user they are on the waiting list
+    await sendNotification(
+      req.user!.userId,
+      `You're on the waiting list for ${trip.date} at ${trip.departureTime}. We'll notify you immediately if a seat opens up.`,
+      "booking_update"
+    );
   }
 
-  // Reload updated booking
   const [freshBooking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, booking.id));
   res.status(201).json(await formatBooking(freshBooking));
 });
@@ -225,17 +285,26 @@ router.delete("/bookings/:id", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  const wasActive = booking.status !== "waiting";
+
   const [updated] = await db
     .update(bookingsTable)
     .set({ status: "canceled" })
     .where(eq(bookingsTable.id, params.data.id))
     .returning();
 
-  // Update seat count
-  await db
-    .update(tripsTable)
-    .set({ bookedSeats: Math.max(0, (await db.select().from(tripsTable).where(eq(tripsTable.id, booking.tripId)))[0]?.bookedSeats - 1) })
-    .where(eq(tripsTable.id, booking.tripId));
+  if (wasActive) {
+    // Decrement seat count and promote next waiting user (FIFO)
+    const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, booking.tripId));
+    if (trip) {
+      await db
+        .update(tripsTable)
+        .set({ bookedSeats: Math.max(0, trip.bookedSeats - 1) })
+        .where(eq(tripsTable.id, booking.tripId));
+
+      await promoteWaitingBooking(booking.tripId);
+    }
+  }
 
   res.json(await formatBooking(updated));
 });
@@ -249,7 +318,6 @@ router.get("/admin/bookings", requireAuth, requireRole("admin"), async (req, res
     .from(bookingsTable)
     .orderBy(desc(bookingsTable.createdAt));
 
-  // Filter by status
   if (parsed.success && parsed.data.status) {
     allBookings = allBookings.filter(b => b.status === parsed.data.status);
   }

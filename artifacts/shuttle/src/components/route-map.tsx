@@ -31,6 +31,8 @@ export interface RouteMapProps {
   showBus?: boolean;
   /** Fires (throttled) with bus progress info so the parent can render ETAs */
   onBusMoved?: (busIdx: number, totalSteps: number, stopIndices: number[]) => void;
+  /** Called when a predefined terminal marker is clicked — lifts coords to parent */
+  onTerminalClick?: (coords: [number, number]) => void;
 }
 
 // ─── Terminals & Route ────────────────────────────────────────────────────────
@@ -186,13 +188,17 @@ function TerminalMarkers({
   busIdx,
   stopIndices,
   totalSteps,
+  onTerminalClick,
 }: {
   busIdx: number;
   stopIndices: number[];
   totalSteps: number;
+  onTerminalClick?: (coords: [number, number]) => void;
 }) {
   const map = useMap();
   const refs = useRef<L.Marker[]>([]);
+  const onClickRef = useRef(onTerminalClick);
+  onClickRef.current = onTerminalClick;
 
   const eta = useCallback((i: number) => {
     if (!totalSteps) return "—";
@@ -212,9 +218,16 @@ function TerminalMarkers({
           <div style="color:#22d3ee;font-weight:700;font-size:14px;margin-bottom:4px;">${t.name}</div>
           <div style="color:#a7b0c0;font-size:11px;margin-bottom:8px;">${t.nameAr}</div>
           <div style="color:#fff;font-size:12px;">⏱ ETA: <strong style="color:#ff2e88">${eta(i)} min</strong></div>
+          ${onClickRef.current ? '<div style="color:#22d3ee;font-size:11px;margin-top:8px;cursor:pointer;">📍 Click to select as pickup</div>' : ''}
         </div>`,
         { className: "rm-popup", closeButton: false }
       );
+      // Fire the callback when a terminal marker is clicked
+      m.on("click", () => {
+        if (onClickRef.current) {
+          onClickRef.current([t.lat, t.lng]);
+        }
+      });
       refs.current.push(m);
     });
 
@@ -318,6 +331,7 @@ export function RouteMap({
   customBookings,
   showBus = true,
   onBusMoved,
+  onTerminalClick,
 }: RouteMapProps) {
   const [routePoints, setRoutePoints] = useState<[number, number][]>([]);
   const [stopIndices, setStopIndices] = useState<number[]>([0, 0, 0, 0]);
@@ -433,7 +447,7 @@ export function RouteMap({
             {showBus && (
               <BusAnimator key={routePoints.length} routePoints={routePoints} onMove={handleBusMove} />
             )}
-            <TerminalMarkers busIdx={busIdx} stopIndices={stopIndices} totalSteps={routePoints.length} key={etaTick} />
+            <TerminalMarkers busIdx={busIdx} stopIndices={stopIndices} totalSteps={routePoints.length} key={etaTick} onTerminalClick={onTerminalClick} />
           </>
         )}
 

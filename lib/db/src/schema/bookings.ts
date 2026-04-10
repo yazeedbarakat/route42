@@ -10,7 +10,7 @@ export const bookingsTable = pgTable("bookings", {
   userId: integer("user_id").notNull().references(() => usersTable.id),
   tripId: integer("trip_id").notNull().references(() => tripsTable.id),
   pickupPointId: integer("pickup_point_id").notNull().references(() => pickupPointsTable.id),
-  status: text("status").notNull().default("pending"), // pending, confirmed, canceled
+  status: text("status").notNull().default("pending"), // pending, confirmed, canceled, waiting
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

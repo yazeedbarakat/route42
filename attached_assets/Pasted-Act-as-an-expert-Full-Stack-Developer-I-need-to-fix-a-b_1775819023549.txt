@@ -1,0 +1,28 @@
+Act as an expert Full-Stack Developer. I need to fix a bug and implement advanced booking logic (Date Selection, Time Windows, and Waiting Lists) in my "Smart Shuttle Solution" project.
+
+**Context:** React/Next.js frontend, maintaining the "42 Intranet V2" dark navy UI theme.
+
+**Step 1: Fix Map Terminal Selection Bug**
+* **Issue:** Currently, if a user clicks on the predefined blue terminal markers on the map, the "Confirm Booking" button remains disabled (it seems only custom off-route clicks are updating the state).
+* **Fix:** Ensure that clicking ANY predefined terminal marker correctly updates the `coordinates` / `selectedPickup` state in the parent Booking Form, allowing the user to successfully confirm the booking.
+
+**Step 2: Add Date Selection UI (Left of Time Selection)**
+* Beside or directly integrated into the "Select Trip & Time" section, add a sleek Date Selector.
+* It should display 3 options as clickable chips/tabs: "Today", "Tomorrow", and the "Day After" (show actual dates/days, e.g., "Mon, Oct 12").
+* Users can book up to 2 days in advance.
+
+**Step 3: Implement the 2-Hour Booking Window Logic**
+* Apply a strict time-filtering logic to the dynamic time slots (8 AM, 10 AM, etc.).
+* **Rule:** A user can only book a trip if it is at least **2 hours** away from the current actual time.
+* If "Today" is selected, dynamically disable or hide any time slots that are less than 2 hours from `new Date()`. (For Tomorrow and the Day After, all slots are naturally available).
+
+**Step 4: Waiting List & Capacity Logic**
+* Define a constant `MAX_CAPACITY = 15` for the shuttle.
+* Update the booking submission and state logic:
+  1. If a selected trip (Date + Time) has `< 15` bookings, the new booking gets `status: "Pending"` (or Confirmed based on earlier logic).
+  2. If the trip already has `>= 15` bookings, the new booking gets `status: "Waiting"`. Display a UI badge to the user explaining they are on the waitlist.
+* **Cancellation & Promotion Logic:** Create a function handling cancellations. If a student cancels their booking, the system MUST check if there are any users with a "Waiting" status for that exact trip. If so:
+  - Promote the first user on the waiting list (FIFO - First In, First Out) to an active status.
+  - Trigger a mock notification function (e.g., `sendNotification(studentId, "Your ride is confirmed!")`).
+
+Please provide the updated code for the `BookingPage` component to handle the UI changes (Date selector, Time filtering) and the logic updates for the Waiting List and Map bug fix.

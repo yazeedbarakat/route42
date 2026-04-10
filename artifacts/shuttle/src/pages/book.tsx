@@ -3,10 +3,11 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { format, addDays } from "date-fns";
+import { format, addDays, isToday, parseISO } from "date-fns";
 import {
   Clock, CheckCircle2, ChevronRight, Loader2,
   CalendarDays, Info, Navigation, ArrowRight, ArrowLeft, Users,
+  AlertCircle, ListOrdered,
 } from "lucide-react";
 import { RouteMap } from "@/components/route-map";
 
@@ -16,6 +17,23 @@ const TIME_SLOTS: Record<Direction, string[]> = {
   inbound:  ["08:00 AM", "10:00 AM", "12:00 PM", "02:00 PM", "04:00 PM", "06:00 PM"],
   outbound: ["01:00 PM", "03:00 PM", "05:00 PM", "07:00 PM"],
 };
+
+const MAX_CAPACITY = 15;
+
+function parseSlotHour(slot: string): { h: number; m: number } {
+  const [time, period] = slot.split(" ");
+  let [h, m] = time.split(":").map(Number);
+  if (period === "PM" && h !== 12) h += 12;
+  if (period === "AM" && h === 12) h = 0;
+  return { h, m };
+}
+
+function isSlotAvailableToday(slot: string): boolean {
+  const { h, m } = parseSlotHour(slot);
+  const now = new Date();
+  const slotMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, m).getTime();
+  return slotMs - now.getTime() >= 2 * 60 * 60 * 1000; // at least 2 hours away
+}
 
 function SegmentBar({ booked, total, min }: { booked: number; total: number; min: number }) {
   const segments = Math.min(total, 20);
@@ -52,17 +70,30 @@ export default function Book() {
     else if (user.role !== "student") setLocation(user.role === "admin" ? "/admin" : "/driver");
   }, [user, setLocation]);
 
-  const tomorrow = format(addDays(new Date(), 1), "yyyy-MM-dd");
-  const { data: trips, isLoading: tripsLoading } = useGetTrips({ date: tomorrow });
-  const { data: pickupPoints } = useGetPickupPoints();
-  const createBooking = useCreateBooking();
+  // Date options: today, tomorrow, day after
+  const dateOptions = [
+    { label: "Today",      sub: format(new Date(), "EEE, MMM d"),         value: format(new Date(), "yyyy-MM-dd") },
+    { label: "Tomorrow",   sub: format(addDays(new Date(), 1), "EEE, MMM d"), value: format(addDays(new Date(), 1), "yyyy-MM-dd") },
+    { label: "Day After",  sub: format(addDays(new Date(), 2), "EEE, MMM d"), value: format(addDays(new Date(), 2), "yyyy-MM-dd") },
+  ];
 
+  const [selectedDate, setSelectedDate] = useState<string>(dateOptions[1].value); // default: tomorrow
   const [direction, setDirection]       = useState<Direction>("inbound");
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [customCoords, setCustomCoords] = useState<[number, number] | null>(null);
+  const [isWaitlisted, setIsWaitlisted] = useState(false);
+
+  const { data: trips, isLoading: tripsLoading } = useGetTrips({ date: selectedDate });
+  const { data: pickupPoints } = useGetPickupPoints();
+  const createBooking = useCreateBooking();
 
   const handleDirectionChange = (dir: Direction) => {
     setDirection(dir);
+    setSelectedTime(null);
+  };
+
+  const handleDateChange = (date: string) => {
+    setSelectedDate(date);
     setSelectedTime(null);
   };
 
@@ -70,11 +101,14 @@ export default function Book() {
     setCustomCoords(coords);
   }, []);
 
+  const selectedIsToday = selectedDate === dateOptions[0].value;
+
   const matchedTrip = trips?.find(t => {
     const norm = (s: string) => s.replace(/\s/g, "").toUpperCase();
     return norm(t.departureTime) === norm(selectedTime ?? "");
   });
 
+  const willBeWaitlisted = matchedTrip ? matchedTrip.bookedSeats >= MAX_CAPACITY : false;
   const canBook = selectedTime !== null && customCoords !== null;
 
   const handleBook = async () => {
@@ -84,11 +118,11 @@ export default function Book() {
       const pickupPointId = pickupPoints?.[0]?.id ?? 1;
 
       if (!tripId) {
-        toast({ title: "No matching trip", description: "The selected time has no available trip for tomorrow.", variant: "destructive" });
+        toast({ title: "No matching trip", description: "The selected time has no available trip for this date.", variant: "destructive" });
         return;
       }
 
-      await createBooking.mutateAsync({
+      const result = await createBooking.mutateAsync({
         data: {
           tripId,
           pickupPointId,
@@ -98,10 +132,20 @@ export default function Book() {
         },
       });
 
-      toast({
-        title: "Booking confirmed!",
-        description: `${direction === "inbound" ? "Go to 42 Irbid" : "Return from 42 Irbid"} · ${selectedTime} · Pickup at ${customCoords[0].toFixed(4)}, ${customCoords[1].toFixed(4)}`,
-      });
+      const wasWaited = (result as any)?.status === "waiting";
+      setIsWaitlisted(wasWaited);
+
+      if (wasWaited) {
+        toast({
+          title: "Added to waiting list",
+          description: `This trip is full. You're on the waitlist for ${selectedTime} — we'll notify you if a seat opens up.`,
+        });
+      } else {
+        toast({
+          title: "Booking confirmed!",
+          description: `${direction === "inbound" ? "Go to 42 Irbid" : "Return from 42 Irbid"} · ${selectedTime} · Pickup set on map.`,
+        });
+      }
       setLocation("/dashboard");
     } catch (err: any) {
       toast({ title: "Booking failed", description: err?.message || "Please try again.", variant: "destructive" });
@@ -117,7 +161,7 @@ export default function Book() {
         <h1 className="text-2xl font-bold text-white">Book a Ride</h1>
         <p className="text-[#a7b0c0] text-sm mt-1 flex items-center gap-1.5">
           <CalendarDays size={14} />
-          Booking for <span className="text-white font-medium">{format(addDays(new Date(), 1), "EEEE, MMMM d")}</span>
+          Select your date below — you can book up to 2 days in advance
         </p>
       </div>
 
@@ -125,7 +169,7 @@ export default function Book() {
         {/* Left: Selection panels */}
         <div className="lg:col-span-3 space-y-5">
 
-          {/* Step 1: Direction + Time */}
+          {/* Step 1: Date + Direction + Time */}
           <div className="bg-white/[0.03] border border-white/[0.08] rounded-xl overflow-hidden">
             <div className="px-5 py-4 border-b border-white/[0.06] flex items-center gap-3">
               <div className="w-6 h-6 rounded-full bg-[#ff2e88]/20 border border-[#ff2e88]/30 flex items-center justify-center text-xs font-bold text-[#ff2e88]">1</div>
@@ -133,30 +177,58 @@ export default function Book() {
             </div>
 
             <div className="p-4 space-y-4">
+              {/* Date Chips */}
+              <div>
+                <p className="text-xs text-[#a7b0c0] font-medium uppercase tracking-wider mb-2">Date</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {dateOptions.map((opt) => {
+                    const isSelected = selectedDate === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => handleDateChange(opt.value)}
+                        className={`flex flex-col items-center py-2.5 px-2 rounded-xl border text-center transition-all duration-150 ${
+                          isSelected
+                            ? "border-[#ff2e88]/50 bg-[#ff2e88]/10 shadow-[0_0_12px_rgba(255,46,136,0.15)]"
+                            : "border-white/[0.08] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
+                        }`}
+                      >
+                        <span className={`text-xs font-bold ${isSelected ? "text-[#ff2e88]" : "text-white"}`}>{opt.label}</span>
+                        <span className="text-[10px] text-[#a7b0c0] mt-0.5">{opt.sub}</span>
+                        {isSelected && <CheckCircle2 size={11} className="text-[#ff2e88] mt-1" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Direction Toggle */}
-              <div className="grid grid-cols-2 gap-2 p-1 bg-white/[0.04] rounded-xl border border-white/[0.06]">
-                <button
-                  onClick={() => handleDirectionChange("inbound")}
-                  className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                    direction === "inbound"
-                      ? "bg-[#ff2e88] text-white shadow-[0_0_14px_rgba(255,46,136,0.35)]"
-                      : "text-[#a7b0c0] hover:text-white"
-                  }`}
-                >
-                  <ArrowRight size={14} />
-                  Go to 42 Irbid
-                </button>
-                <button
-                  onClick={() => handleDirectionChange("outbound")}
-                  className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                    direction === "outbound"
-                      ? "bg-[#22d3ee] text-[#0d1117] shadow-[0_0_14px_rgba(34,211,238,0.35)]"
-                      : "text-[#a7b0c0] hover:text-white"
-                  }`}
-                >
-                  <ArrowLeft size={14} />
-                  Return from 42
-                </button>
+              <div>
+                <p className="text-xs text-[#a7b0c0] font-medium uppercase tracking-wider mb-2">Direction</p>
+                <div className="grid grid-cols-2 gap-2 p-1 bg-white/[0.04] rounded-xl border border-white/[0.06]">
+                  <button
+                    onClick={() => handleDirectionChange("inbound")}
+                    className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                      direction === "inbound"
+                        ? "bg-[#ff2e88] text-white shadow-[0_0_14px_rgba(255,46,136,0.35)]"
+                        : "text-[#a7b0c0] hover:text-white"
+                    }`}
+                  >
+                    <ArrowRight size={14} />
+                    Go to 42 Irbid
+                  </button>
+                  <button
+                    onClick={() => handleDirectionChange("outbound")}
+                    className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                      direction === "outbound"
+                        ? "bg-[#22d3ee] text-[#0d1117] shadow-[0_0_14px_rgba(34,211,238,0.35)]"
+                        : "text-[#a7b0c0] hover:text-white"
+                    }`}
+                  >
+                    <ArrowLeft size={14} />
+                    Return from 42
+                  </button>
+                </div>
               </div>
 
               {/* Time Slot Chips */}
@@ -173,21 +245,23 @@ export default function Book() {
                         const norm = (s: string) => s.replace(/\s/g, "").toUpperCase();
                         return norm(t.departureTime) === norm(slot);
                       });
-                      const isFull = trip ? trip.availableSeats <= 0 : false;
-                      const hasTrip = Boolean(trip);
-                      const isSelected = selectedTime === slot;
+                      const isFull      = trip ? trip.bookedSeats >= trip.totalSeats : false;
+                      const isWaitlist  = trip ? trip.bookedSeats >= MAX_CAPACITY : false;
+                      const tooSoon     = selectedIsToday && !isSlotAvailableToday(slot);
+                      const isDisabled  = isFull || tooSoon;
+                      const isSelected  = selectedTime === slot;
 
                       return (
                         <button
                           key={slot}
-                          onClick={() => !isFull && setSelectedTime(isSelected ? null : slot)}
-                          disabled={isFull}
+                          onClick={() => !isDisabled && setSelectedTime(isSelected ? null : slot)}
+                          disabled={isDisabled}
                           className={`relative flex flex-col items-center gap-0.5 px-4 py-2.5 rounded-xl border text-sm font-mono font-bold transition-all duration-150 ${
                             isSelected
                               ? direction === "inbound"
                                 ? "border-[#ff2e88]/60 bg-[#ff2e88]/15 text-[#ff2e88] shadow-[0_0_14px_rgba(255,46,136,0.2)]"
                                 : "border-[#22d3ee]/60 bg-[#22d3ee]/15 text-[#22d3ee] shadow-[0_0_14px_rgba(34,211,238,0.2)]"
-                              : isFull
+                              : isDisabled
                                 ? "border-white/[0.05] bg-white/[0.02] text-white/20 cursor-not-allowed"
                                 : "border-white/[0.08] bg-white/[0.02] text-white hover:border-white/25 hover:bg-white/[0.05]"
                           }`}
@@ -196,8 +270,17 @@ export default function Book() {
                             <Clock size={12} className={isSelected ? (direction === "inbound" ? "text-[#ff2e88]" : "text-[#22d3ee]") : "text-[#a7b0c0]"} />
                             {slot}
                           </div>
-                          {isFull && <span className="text-[9px] font-sans font-normal text-red-400/80">Full</span>}
-                          {hasTrip && !isFull && trip && (
+
+                          {tooSoon && !isFull && (
+                            <span className="text-[9px] font-sans font-normal text-amber-400/80">Too soon</span>
+                          )}
+                          {isFull && !isWaitlist && (
+                            <span className="text-[9px] font-sans font-normal text-red-400/80">Full</span>
+                          )}
+                          {isWaitlist && (
+                            <span className="text-[9px] font-sans font-normal text-amber-400/80">Waitlist</span>
+                          )}
+                          {trip && !isFull && !tooSoon && (
                             <span className={`text-[9px] font-sans font-normal flex items-center gap-0.5 ${isSelected ? "opacity-80" : "text-[#a7b0c0]"}`}>
                               <Users size={8} />{trip.availableSeats} left
                             </span>
@@ -210,9 +293,18 @@ export default function Book() {
                     })}
                   </div>
 
-                  {trips?.length === 0 && (
+                  {selectedIsToday && (
+                    <div className="flex items-start gap-2 py-2 px-3 bg-amber-400/[0.05] border border-amber-400/20 rounded-lg">
+                      <AlertCircle size={13} className="text-amber-400 mt-0.5 shrink-0" />
+                      <p className="text-[11px] text-amber-300/90 leading-relaxed">
+                        Trips must be booked at least <strong className="text-amber-200">2 hours</strong> in advance. Greyed-out slots are no longer available today.
+                      </p>
+                    </div>
+                  )}
+
+                  {trips?.length === 0 && !tripsLoading && (
                     <div className="flex items-center gap-2 py-2 text-[#a7b0c0] text-sm">
-                      <Info size={15} />No trips scheduled for tomorrow.
+                      <Info size={15} />No trips scheduled for this date.
                     </div>
                   )}
                 </div>
@@ -221,7 +313,14 @@ export default function Book() {
               {/* Seat info for selected trip */}
               {matchedTrip && (
                 <div className="pt-3 border-t border-white/[0.06]">
-                  <p className="text-xs text-[#a7b0c0] mb-2">Seat availability for selected trip</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-[#a7b0c0]">Seat availability</p>
+                    {willBeWaitlisted && (
+                      <span className="flex items-center gap-1 text-[10px] text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-full">
+                        <ListOrdered size={10} />Waitlist booking
+                      </span>
+                    )}
+                  </div>
                   <SegmentBar booked={matchedTrip.bookedSeats} total={matchedTrip.totalSeats} min={matchedTrip.minBookingsToConfirm} />
                 </div>
               )}
@@ -238,7 +337,7 @@ export default function Book() {
             <div className="px-5 py-3 bg-[#22d3ee]/[0.05] border-b border-[#22d3ee]/10 flex items-start gap-2.5">
               <Navigation size={14} className="text-[#22d3ee] mt-0.5 shrink-0" />
               <p className="text-sm text-[#22d3ee]/90 leading-relaxed">
-                Click anywhere on the <strong className="text-white">highlighted pink bus route</strong> to set your exact pickup location. Points off-route will be rejected.
+                Click anywhere on the <strong className="text-white">highlighted pink bus route</strong> or tap a <strong className="text-white">terminal marker</strong> to set your pickup location.
               </p>
             </div>
 
@@ -247,6 +346,7 @@ export default function Book() {
                 height="340px"
                 showBus={false}
                 onLocationSelect={handleLocationSelect}
+                onTerminalClick={handleLocationSelect}
                 selectedCoords={customCoords}
               />
             </div>
@@ -278,7 +378,9 @@ export default function Book() {
               <div className="space-y-3">
                 <div className="flex justify-between items-center py-2.5 border-b border-white/[0.05]">
                   <span className="text-sm text-[#a7b0c0]">Date</span>
-                  <span className="text-sm font-medium text-white">{format(addDays(new Date(), 1), "MMM d, yyyy")}</span>
+                  <span className={`text-sm font-medium ${selectedDate ? "text-white" : "text-white/30"}`}>
+                    {selectedDate ? format(parseISO(selectedDate), "MMM d, yyyy") : "—"}
+                  </span>
                 </div>
 
                 <div className="flex justify-between items-center py-2.5 border-b border-white/[0.05]">
@@ -311,7 +413,20 @@ export default function Book() {
                 )}
               </div>
 
-              {matchedTrip && (
+              {/* Waitlist warning */}
+              {willBeWaitlisted && selectedTime && (
+                <div className="flex items-start gap-2.5 p-3 bg-amber-400/[0.07] border border-amber-400/25 rounded-lg">
+                  <ListOrdered size={15} className="text-amber-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-amber-300">This trip is full</p>
+                    <p className="text-[11px] text-amber-400/80 mt-0.5 leading-relaxed">
+                      You'll be added to the <strong>waiting list</strong>. If someone cancels, you'll be automatically promoted and notified.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {matchedTrip && !willBeWaitlisted && (
                 <div className="pt-3 border-t border-white/[0.06]">
                   <p className="text-xs text-[#a7b0c0] mb-2">Seat availability</p>
                   <SegmentBar booked={matchedTrip.bookedSeats} total={matchedTrip.totalSeats} min={matchedTrip.minBookingsToConfirm} />
@@ -323,12 +438,16 @@ export default function Book() {
                 disabled={!canBook || createBooking.isPending}
                 className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-semibold text-sm transition-all duration-200 mt-2 ${
                   canBook
-                    ? "bg-gradient-to-r from-[#ff2e88] to-[#e0176b] hover:from-[#ff4595] hover:to-[#ff2e88] text-white shadow-lg hover:shadow-[0_0_20px_rgba(255,46,136,0.4)]"
+                    ? willBeWaitlisted
+                      ? "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white shadow-lg hover:shadow-[0_0_20px_rgba(245,158,11,0.4)]"
+                      : "bg-gradient-to-r from-[#ff2e88] to-[#e0176b] hover:from-[#ff4595] hover:to-[#ff2e88] text-white shadow-lg hover:shadow-[0_0_20px_rgba(255,46,136,0.4)]"
                     : "bg-white/[0.05] text-white/30 cursor-not-allowed"
                 }`}
               >
                 {createBooking.isPending ? (
-                  <><Loader2 size={16} className="animate-spin" />Reserving seat...</>
+                  <><Loader2 size={16} className="animate-spin" />Processing...</>
+                ) : willBeWaitlisted ? (
+                  <><ListOrdered size={16} />Join Waiting List</>
                 ) : (
                   <>Confirm Booking <ChevronRight size={16} /></>
                 )}
@@ -340,7 +459,7 @@ export default function Book() {
                     ? "Pick a direction, time, and your pickup on the map"
                     : !selectedTime
                       ? "Select a departure time above"
-                      : "Click the map route to set your pickup point"}
+                      : "Tap the map route or a terminal to set your pickup"}
                 </p>
               )}
             </div>
