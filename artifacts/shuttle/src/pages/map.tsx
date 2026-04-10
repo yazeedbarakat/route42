@@ -17,13 +17,13 @@ interface Terminal {
 }
 
 const TERMINALS: Terminal[] = [
-  { id: 1, name: "Northern Bus Terminal", nameAr: "مجمع الشمالي",    lat: 32.5625, lng: 35.8480, eta: 2  },
-  { id: 2, name: "Sheikh Khalil Terminal", nameAr: "مجمع الشيخ خليل", lat: 32.5557, lng: 35.8427, eta: 7  },
-  { id: 3, name: "Amman Bus Terminal",     nameAr: "مجمع عمان",        lat: 32.5370, lng: 35.8522, eta: 14 },
-  { id: 4, name: "Al-Ghour New Terminal",  nameAr: "مجمع الغور الجديد", lat: 32.5590, lng: 35.8642, eta: 19 },
+  { id: 1, name: "Northern Bus Terminal",  nameAr: "مجمع الشمالي",      lat: 32.568219717501016, lng: 35.85560315169505, eta: 2  },
+  { id: 2, name: "Al-Ghour New Terminal",  nameAr: "مجمع الغور الجديد", lat: 32.55064060061745,  lng: 35.8361863228588,  eta: 6  },
+  { id: 3, name: "Sheikh Khalil Terminal", nameAr: "مجمع الشيخ خليل",   lat: 32.55034219324052,  lng: 35.85550052285881, eta: 11 },
+  { id: 4, name: "Amman Bus Terminal",     nameAr: "مجمع عمان",          lat: 32.535047165765235, lng: 35.869768897719915, eta: 17 },
 ];
 
-const DESTINATION = { name: "42 Irbid", lat: 32.5555, lng: 35.8516 };
+const DESTINATION = { name: "42 Irbid", lat: 32.50422734122801, lng: 35.8711883498439 };
 
 // Full route: terminals → destination in loop
 const ROUTE_BASE: [number, number][] = [
@@ -299,8 +299,8 @@ export default function MapPage() {
           `}</style>
 
           <MapContainer
-            center={[32.5490, 35.8510]}
-            zoom={14}
+            center={[32.535, 35.85]}
+            zoom={13}
             style={{ height: "100%", width: "100%" }}
             zoomControl={true}
             attributionControl={false}
