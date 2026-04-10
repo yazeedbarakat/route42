@@ -1,0 +1,27 @@
+Act as an expert Full-Stack Developer. I need to integrate the UI Booking Form with the custom map selection feature in my "Smart Shuttle Solution" project.
+
+**Goal:**
+Add a new option to the Pickup Point dropdown that activates map-based selection, saves the user's custom coordinates, and displays these custom points on the Admin and Driver map views.
+
+**Step 1: Update the Booking Form (`BookingPage` / `Dashboard`)**
+* In the "Select Pickup Point" dropdown, add a 5th option: "Custom Location (Select on Map)".
+* When the user selects this option, show a sleek UI helper text: "Please click on the highlighted bus route on the map below to set your exact pickup location."
+* Create a state to store the selected coordinates (e.g., `const [customCoords, setCustomCoords] = useState(null)`).
+* The booking submission payload should now include `pickupType: "custom"` and `coordinates: [lat, lng]` if this option is used.
+
+**Step 2: Map Interaction (`InteractiveMap.jsx`)**
+* The map component should accept a new prop: `onLocationSelect={(coords) => setCustomCoords(coords)}`.
+* Ensure the previously built click handler (which validates the point against the OSRM route) calls this prop ONLY if the clicked location is valid (close to the route).
+* When a student clicks a valid point, drop a temporary glowing Green marker to indicate their selection before they click "Confirm Booking".
+
+**Step 3: Driver & Admin Dashboards Map Updates**
+* The `InteractiveMap` must now accept an array of `bookings` as a prop.
+* If the logged-in user is an Admin or Driver, map through these bookings. 
+* Render all custom pickup points chosen by students as small, distinct markers (e.g., small glowing Yellow/Orange dots).
+* When the Driver clicks one of these yellow custom markers, open a popup showing: "Custom Pickup - Passenger: [Dummy Student Name]".
+
+**Step 4: Maintain Theme & Stability**
+* Keep the existing "42 Intranet V2" styling (navy backgrounds, rounded corners, neon glowing accents).
+* Ensure seamless state lifting between the form and the map without causing unnecessary re-renders.
+
+Please provide the updated React code for the Booking Form component and the necessary adjustments to `InteractiveMap.jsx` to support this complete flow.

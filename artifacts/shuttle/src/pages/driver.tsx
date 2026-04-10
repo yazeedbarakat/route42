@@ -1,13 +1,23 @@
 import { useGetDriverTrips } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { format } from "date-fns";
-import { Truck, Users, MapPin, Clock, CheckCircle2, Moon } from "lucide-react";
+import { Truck, Users, MapPin, Clock, CheckCircle2, Moon, Map } from "lucide-react";
+import { RouteMap, type CustomBooking } from "@/components/route-map";
+
+// Demo custom bookings for driver map view
+const DRIVER_CUSTOM_BOOKINGS: CustomBooking[] = [
+  { lat: 32.5592, lng: 35.8520, studentName: "Youssef Al-Ahmad" },
+  { lat: 32.5464, lng: 35.8575, studentName: "Sara Mansour"      },
+  { lat: 32.5508, lng: 35.8465, studentName: "Omar Khalil"       },
+  { lat: 32.5385, lng: 35.8610, studentName: "Layla Hassan"      },
+];
 
 export default function DriverDashboard() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const [showMap, setShowMap] = useState(false);
 
   useEffect(() => {
     if (!user) setLocation("/");
@@ -71,20 +81,15 @@ export default function DriverDashboard() {
                 <p className="text-xs font-semibold text-[#a7b0c0] uppercase tracking-wider mb-3">Pickup Stops</p>
                 {trip.pickupStops.map((stop, idx) => (
                   <div key={stop.pickupPointId} className="flex items-center gap-4 p-4 rounded-xl bg-white/[0.04] border border-white/[0.06]">
-                    {/* Stop number */}
                     <div className="w-10 h-10 rounded-full bg-[#ff2e88]/10 border border-[#ff2e88]/20 flex items-center justify-center shrink-0">
                       <span className="text-sm font-bold text-[#ff2e88]">{idx + 1}</span>
                     </div>
-
-                    {/* Location */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <MapPin size={14} className="text-[#22d3ee] shrink-0" />
                         <span className="font-semibold text-white text-base truncate">{stop.pickupPointName}</span>
                       </div>
                     </div>
-
-                    {/* Passenger count - large and easy to read */}
                     <div className="shrink-0 text-center min-w-[60px]">
                       <div className="text-3xl font-bold font-mono text-[#22d3ee] leading-none">{stop.passengerCount}</div>
                       <div className="text-xs text-[#a7b0c0] mt-0.5">passengers</div>
@@ -102,6 +107,62 @@ export default function DriverDashboard() {
           ))}
         </div>
       )}
+
+      {/* ── Custom Pickup Map ── */}
+      <div className="bg-white/[0.03] border border-[#fb923c]/20 rounded-2xl overflow-hidden">
+        <button
+          onClick={() => setShowMap(v => !v)}
+          className="w-full px-5 py-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[#fb923c]/10 border border-[#fb923c]/20 flex items-center justify-center">
+              <Map size={16} className="text-[#fb923c]" />
+            </div>
+            <div className="text-left">
+              <p className="font-semibold text-white text-sm">Custom Pickup Points</p>
+              <p className="text-xs text-[#a7b0c0]">{DRIVER_CUSTOM_BOOKINGS.length} students requested on-route pickups</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[#fb923c] bg-[#fb923c]/10 border border-[#fb923c]/20 px-2.5 py-1 rounded-full font-medium">
+              {DRIVER_CUSTOM_BOOKINGS.length} stops
+            </span>
+            <span className="text-[#a7b0c0] text-sm">{showMap ? "▲" : "▼"}</span>
+          </div>
+        </button>
+
+        {showMap && (
+          <>
+            {/* Passenger list */}
+            <div className="border-t border-white/[0.06] px-5 py-3 grid grid-cols-2 gap-2">
+              {DRIVER_CUSTOM_BOOKINGS.map((b, i) => (
+                <div key={i} className="flex items-center gap-2 p-2.5 rounded-lg bg-[#fb923c]/[0.06] border border-[#fb923c]/15">
+                  <div className="w-2 h-2 rounded-full bg-[#fb923c] shadow-[0_0_6px_rgba(251,146,60,0.8)] shrink-0" />
+                  <div>
+                    <p className="text-xs font-medium text-white leading-tight">{b.studentName}</p>
+                    <p className="text-[10px] font-mono text-[#a7b0c0]">{b.lat.toFixed(4)}, {b.lng.toFixed(4)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Map */}
+            <div className="border-t border-white/[0.06]">
+              <RouteMap
+                height="380px"
+                showBus={false}
+                customBookings={DRIVER_CUSTOM_BOOKINGS}
+              />
+            </div>
+
+            <div className="px-5 py-3 border-t border-white/[0.06] bg-[#fb923c]/[0.04]">
+              <p className="text-xs text-[#a7b0c0]">
+                <span className="text-[#fb923c] font-medium">🟠 Orange markers</span> = custom on-route pickups · Click for passenger details
+              </p>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

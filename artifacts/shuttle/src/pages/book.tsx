@@ -1,30 +1,27 @@
 import { useGetTrips, useGetPickupPoints, useCreateBooking } from "@workspace/api-client-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { format, addDays } from "date-fns";
-import { Clock, MapPin, Users, CheckCircle2, ChevronRight, Loader2, CalendarDays, Info } from "lucide-react";
+import { Clock, MapPin, Users, CheckCircle2, ChevronRight, Loader2, CalendarDays, Info, Navigation } from "lucide-react";
+import { RouteMap } from "@/components/route-map";
 
 function SegmentBar({ booked, total, min }: { booked: number; total: number; min: number }) {
   const segments = Math.min(total, 20);
   const filledSegments = Math.round((booked / total) * segments);
   const minSegments = Math.round((min / total) * segments);
-
   return (
     <div className="space-y-2">
       <div className="flex gap-0.5">
         {Array.from({ length: segments }, (_, i) => (
-          <div
-            key={i}
-            className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${
-              i < filledSegments
-                ? i >= minSegments - 1
-                  ? "bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.8)]"
-                  : "bg-[#ff2e88] shadow-[0_0_4px_rgba(255,46,136,0.8)]"
-                : "bg-white/10"
-            }`}
-          />
+          <div key={i} className={`flex-1 h-1.5 rounded-full transition-all duration-300 ${
+            i < filledSegments
+              ? i >= minSegments - 1
+                ? "bg-emerald-400 shadow-[0_0_4px_rgba(52,211,153,0.8)]"
+                : "bg-[#ff2e88] shadow-[0_0_4px_rgba(255,46,136,0.8)]"
+              : "bg-white/10"
+          }`} />
         ))}
       </div>
       <div className="flex justify-between text-xs text-[#a7b0c0]">
@@ -34,6 +31,8 @@ function SegmentBar({ booked, total, min }: { booked: number; total: number; min
     </div>
   );
 }
+
+const CUSTOM_PICKUP_ID = -1; // sentinel value — not a real pickup point ID
 
 export default function Book() {
   const { user } = useAuth();
@@ -50,23 +49,50 @@ export default function Book() {
   const { data: pickupPoints, isLoading: pointsLoading } = useGetPickupPoints();
   const createBooking = useCreateBooking();
 
-  const [selectedTrip, setSelectedTrip] = useState<number | null>(null);
-  const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
+  const [selectedTrip, setSelectedTrip]     = useState<number | null>(null);
+  const [selectedPoint, setSelectedPoint]   = useState<number | null>(null);
+  const [customCoords, setCustomCoords]     = useState<[number, number] | null>(null);
+
+  const isCustomMode = selectedPoint === CUSTOM_PICKUP_ID;
+  const canBook = selectedTrip !== null && (
+    isCustomMode ? customCoords !== null : selectedPoint !== null
+  );
+
+  const handleLocationSelect = useCallback((coords: [number, number]) => {
+    setCustomCoords(coords);
+  }, []);
 
   const handleBook = async () => {
-    if (!selectedTrip || !selectedPoint) return;
+    if (!selectedTrip) return;
     try {
-      await createBooking.mutateAsync({ data: { tripId: selectedTrip, pickupPointId: selectedPoint } });
-      toast({ title: "Booking confirmed!", description: "Your seat has been reserved." });
+      // For custom pickup, use the first terminal ID as the API anchor
+      const pickupPointId = isCustomMode
+        ? (pickupPoints?.[0]?.id ?? 1)
+        : selectedPoint!;
+
+      await createBooking.mutateAsync({
+        data: {
+          tripId: selectedTrip,
+          pickupPointId,
+          ...(isCustomMode && customCoords
+            ? { customLat: customCoords[0], customLng: customCoords[1], pickupType: "custom" }
+            : {}),
+        },
+      });
+      toast({
+        title: "Booking confirmed!",
+        description: isCustomMode && customCoords
+          ? `Custom pickup at ${customCoords[0].toFixed(4)}, ${customCoords[1].toFixed(4)}`
+          : "Your seat has been reserved.",
+      });
       setLocation("/dashboard");
     } catch (err: any) {
       toast({ title: "Booking failed", description: err?.message || "Please try again.", variant: "destructive" });
     }
   };
 
-  const activeTrip = trips?.find(t => t.id === selectedTrip);
+  const activeTrip  = trips?.find(t => t.id === selectedTrip);
   const activePoint = pickupPoints?.find(p => p.id === selectedPoint);
-  const canBook = selectedTrip !== null && selectedPoint !== null;
 
   if (!user) return null;
 
@@ -84,6 +110,7 @@ export default function Book() {
       <div className="grid lg:grid-cols-5 gap-5">
         {/* Left: Selection panels */}
         <div className="lg:col-span-3 space-y-5">
+
           {/* Step 1: Time */}
           <div className="bg-white/[0.03] border border-white/[0.08] rounded-xl overflow-hidden">
             <div className="px-5 py-4 border-b border-white/[0.06] flex items-center gap-3">
@@ -104,7 +131,6 @@ export default function Book() {
                   {trips?.map((trip) => {
                     const isFull = trip.availableSeats <= 0;
                     const isSelected = selectedTrip === trip.id;
-                    const fillPct = (trip.bookedSeats / trip.totalSeats) * 100;
                     return (
                       <button
                         key={trip.id}
@@ -139,9 +165,7 @@ export default function Book() {
                         <div className="flex gap-0.5">
                           {Array.from({ length: 20 }, (_, i) => {
                             const filled = i < Math.round((trip.bookedSeats / trip.totalSeats) * 20);
-                            return (
-                              <div key={i} className={`flex-1 h-1 rounded-full ${filled ? (isSelected ? "bg-[#ff2e88]" : "bg-[#ff2e88]/60") : "bg-white/10"}`} />
-                            );
+                            return <div key={i} className={`flex-1 h-1 rounded-full ${filled ? (isSelected ? "bg-[#ff2e88]" : "bg-[#ff2e88]/60") : "bg-white/10"}`} />;
                           })}
                         </div>
                         <div className="text-xs text-[#a7b0c0] mt-1.5">
@@ -155,7 +179,7 @@ export default function Book() {
             </div>
           </div>
 
-          {/* Step 2: Pickup */}
+          {/* Step 2: Pickup Point */}
           <div className="bg-white/[0.03] border border-white/[0.08] rounded-xl overflow-hidden">
             <div className="px-5 py-4 border-b border-white/[0.06] flex items-center gap-3">
               <div className="w-6 h-6 rounded-full bg-[#22d3ee]/20 border border-[#22d3ee]/30 flex items-center justify-center text-xs font-bold text-[#22d3ee]">2</div>
@@ -168,12 +192,13 @@ export default function Book() {
                 </div>
               ) : (
                 <div className="space-y-2">
+                  {/* Standard pickup points */}
                   {pickupPoints?.map((point) => {
                     const isSelected = selectedPoint === point.id;
                     return (
                       <button
                         key={point.id}
-                        onClick={() => setSelectedPoint(point.id)}
+                        onClick={() => { setSelectedPoint(point.id); setCustomCoords(null); }}
                         className={`w-full text-left rounded-lg border p-4 transition-all duration-150 ${
                           isSelected
                             ? "border-[#22d3ee]/50 bg-[#22d3ee]/10 shadow-[0_0_16px_rgba(34,211,238,0.1)]"
@@ -193,10 +218,81 @@ export default function Book() {
                       </button>
                     );
                   })}
+
+                  {/* ── Custom Location Option ── */}
+                  <button
+                    onClick={() => { setSelectedPoint(CUSTOM_PICKUP_ID); setCustomCoords(null); }}
+                    className={`w-full text-left rounded-lg border p-4 transition-all duration-150 ${
+                      isCustomMode
+                        ? "border-emerald-400/50 bg-emerald-400/10 shadow-[0_0_16px_rgba(52,211,153,0.1)]"
+                        : "border-white/[0.08] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isCustomMode ? "bg-emerald-400/20" : "bg-white/[0.05]"}`}>
+                        <Navigation size={15} className={isCustomMode ? "text-emerald-400" : "text-[#a7b0c0]"} />
+                      </div>
+                      <div className="flex-1">
+                        <div className={`font-medium text-sm ${isCustomMode ? "text-emerald-400" : "text-white"}`}>
+                          Custom Location (Select on Map)
+                        </div>
+                        <div className="text-xs text-[#a7b0c0] mt-0.5">
+                          {customCoords
+                            ? `📍 ${customCoords[0].toFixed(4)}, ${customCoords[1].toFixed(4)}`
+                            : "Click a point on the bus route below"}
+                        </div>
+                      </div>
+                      {isCustomMode && customCoords && <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />}
+                    </div>
+                  </button>
                 </div>
               )}
             </div>
           </div>
+
+          {/* Step 3: Inline map (only shown when custom mode is active) */}
+          {isCustomMode && (
+            <div className="bg-white/[0.03] border border-emerald-400/20 rounded-xl overflow-hidden">
+              <div className="px-5 py-4 border-b border-white/[0.06] flex items-center gap-3">
+                <div className="w-6 h-6 rounded-full bg-emerald-400/20 border border-emerald-400/30 flex items-center justify-center text-xs font-bold text-emerald-400">3</div>
+                <span className="font-semibold text-white text-sm">Select Pickup on Map</span>
+              </div>
+
+              {/* Helper text */}
+              <div className="px-5 py-3 bg-emerald-400/[0.05] border-b border-emerald-400/10 flex items-start gap-2.5">
+                <Navigation size={14} className="text-emerald-400 mt-0.5 shrink-0" />
+                <p className="text-sm text-emerald-300 leading-relaxed">
+                  Click anywhere on the <strong className="text-emerald-200">highlighted pink bus route</strong> to set your exact pickup location. Points off-route will be rejected.
+                </p>
+              </div>
+
+              {/* Inline map */}
+              <div className="rounded-b-xl overflow-hidden">
+                <RouteMap
+                  height="340px"
+                  showBus={false}
+                  onLocationSelect={handleLocationSelect}
+                  selectedCoords={customCoords}
+                />
+              </div>
+
+              {/* Confirmation row */}
+              {customCoords && (
+                <div className="px-5 py-3 border-t border-emerald-400/20 bg-emerald-400/[0.05] flex items-center gap-2">
+                  <CheckCircle2 size={14} className="text-emerald-400" />
+                  <span className="text-xs text-emerald-300 font-medium">
+                    Pickup confirmed at {customCoords[0].toFixed(5)}, {customCoords[1].toFixed(5)}
+                  </span>
+                  <button
+                    onClick={() => setCustomCoords(null)}
+                    className="ml-auto text-[10px] text-[#a7b0c0] hover:text-white underline"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right: Summary */}
@@ -219,20 +315,28 @@ export default function Book() {
                 </div>
                 <div className="flex justify-between items-center py-2.5">
                   <span className="text-sm text-[#a7b0c0]">Pickup</span>
-                  <span className={`text-sm font-medium text-right max-w-[140px] ${activePoint ? "text-[#22d3ee]" : "text-white/30"}`}>
-                    {activePoint?.name || "—"}
+                  <span className={`text-sm font-medium text-right max-w-[140px] ${
+                    isCustomMode
+                      ? customCoords ? "text-emerald-400" : "text-amber-400"
+                      : activePoint ? "text-[#22d3ee]" : "text-white/30"
+                  }`}>
+                    {isCustomMode
+                      ? customCoords ? "Custom (on-route)" : "Select on map ↓"
+                      : activePoint?.name || "—"}
                   </span>
                 </div>
+                {isCustomMode && customCoords && (
+                  <div className="flex justify-between items-center py-2 bg-emerald-400/[0.05] border border-emerald-400/20 rounded-lg px-3">
+                    <span className="text-xs text-[#a7b0c0]">Coords</span>
+                    <span className="text-xs font-mono text-emerald-400">{customCoords[0].toFixed(4)}, {customCoords[1].toFixed(4)}</span>
+                  </div>
+                )}
               </div>
 
               {activeTrip && (
                 <div className="pt-3 border-t border-white/[0.06]">
                   <p className="text-xs text-[#a7b0c0] mb-2">Seat availability</p>
-                  <SegmentBar
-                    booked={activeTrip.bookedSeats}
-                    total={activeTrip.totalSeats}
-                    min={activeTrip.minBookingsToConfirm}
-                  />
+                  <SegmentBar booked={activeTrip.bookedSeats} total={activeTrip.totalSeats} min={activeTrip.minBookingsToConfirm} />
                 </div>
               )}
 
@@ -253,7 +357,11 @@ export default function Book() {
               </button>
 
               {!canBook && (
-                <p className="text-xs text-center text-[#a7b0c0]">Select a time slot and pickup point to continue</p>
+                <p className="text-xs text-center text-[#a7b0c0]">
+                  {isCustomMode && !customCoords
+                    ? "Click on the map route to set your custom pickup"
+                    : "Select a time slot and pickup point to continue"}
+                </p>
               )}
             </div>
           </div>
