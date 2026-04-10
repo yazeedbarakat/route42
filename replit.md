@@ -27,8 +27,8 @@ Terminal dark aesthetic: deep black background (#0a0a0a), terminal green (#00FF0
 ## Demo Credentials
 
 - **Admin**: admin@42irbid.com / admin123
-- **Driver**: driver@42irbid.com / driver123
-- **Student**: ali@42irbid.com / student123
+- **Driver**: Driver ID `DRV-001` or driver@42irbid.com / driver123
+- **Student**: ali@learner.42.tech / student123
 
 ## Pickup Points
 

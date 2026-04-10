@@ -316,7 +316,7 @@ export default function Login() {
             </div>
             <div className="flex justify-between">
               <span className="text-emerald-400">Driver</span>
-              <span className="text-white/50">Driver ID: DRV-001</span>
+              <span className="text-white/50">DRV-001 or driver@42irbid.com / driver123</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[#22d3ee]">Student</span>
