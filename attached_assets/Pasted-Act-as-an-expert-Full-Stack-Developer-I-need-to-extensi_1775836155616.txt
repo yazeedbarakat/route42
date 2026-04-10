@@ -1,0 +1,33 @@
+Act as an expert Full-Stack Developer. I need to extensively upgrade the "Driver Dashboard" in my "42 transportation" project to include a 3-day scheduling system, passenger manifest, and daily statistics.
+
+**Step 1: Date Navigation (3-Day Window)**
+* Implement a Date Selector at the top of the Driver Dashboard.
+* It should offer 3 selectable options: "Today", "Tomorrow", and the "Day After" (displaying the day name and date, e.g., Sat, Apr 11).
+* **Logic:** When the driver selects a date, the dashboard must re-fetch and filter all trip data to show ONLY trips scheduled for that specific date.
+
+**Step 2: Trip & Passenger Manifest (Dynamic List)**
+* For the selected date, render a list of all scheduled trips (e.g., 08:00 AM - Inbound).
+* For each trip, display:
+  1. **Passenger Count:** A badge showing (X / 15) seats filled.
+  2. **Detailed Manifest:** A dropdown or expansion panel showing a table of all booked students for that specific trip. 
+  3. **Student Info:** The table must include the Student Name and Phone Number.
+  4. **Pickup Location:** Clearly show the Pickup Point (Fixed terminal name or "Custom Pickup" label).
+
+**Step 3: Daily Statistics Dashboard (Stats Cards)**
+* Add a "Daily Overview" section above the trip list for the selected date.
+* Include 3-4 glowing Stat Cards using the "42 Intranet V2" theme:
+  - **Total Trips:** Number of trips with at least one booking today.
+  - **Total Passengers:** Sum of all students booked across all trips for the day.
+  - **Peak Time:** The time slot with the highest number of bookings.
+  - **Efficiency:** Percentage of total seats filled (Total Passengers / (Trips * 15)).
+
+**Step 4: Driver Controls & Navigation**
+* Add a "Contact" button next to each student's phone number (a simple `tel:` link).
+* Add a "Start Trip" button for the driver, which highlights that specific trip's route on the map.
+* Ensure the Driver Map (previously built) updates its markers to show only students booked for the *currently selected date and time*.
+
+**Step 5: Security & UI Consistency**
+* Ensure this dashboard is strictly accessible only to users with the `role: 'driver'`.
+* Maintain the "42 Intranet V2" dark navy theme, using pink/cyan neon accents, rounded corners, and blurred glass effects for the cards.
+
+Please provide the updated code for `DriverDashboard.jsx` and any necessary Backend API/Controller updates to support these date-specific queries and statistics.
