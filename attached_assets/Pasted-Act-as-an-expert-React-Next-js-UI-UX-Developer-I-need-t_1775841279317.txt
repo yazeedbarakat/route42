@@ -1,0 +1,27 @@
+Act as an expert React/Next.js UI/UX Developer. I need to completely redesign the Driver's "Route Map" page to match a specific top-and-bottom navigation layout.
+
+**Context:**
+Currently, when the driver clicks "Route Map" from the sidebar, it shows a dark map covering the whole screen with floating stats. I want to change this to a split layout: A dark Stats Panel on top, and a Light Theme map on the bottom.
+
+**Task 1: Conditional Rendering (Empty State vs. Active State)**
+* The `RouteMap` component must check if the driver has an active/started trip (`isTripActive`).
+* **If NO active trip:** Render an "Empty Map". This should be a clean, Light Theme map (CartoDB Light or standard OSM) centered on Irbid `[32.55, 35.85]`, with NO markers, NO polylines, and NO status panels. Just an empty map waiting for a trip.
+
+**Task 2: Active Trip Layout (The Navigation Dashboard)**
+* **If an active trip EXISTS:** Render a vertical split layout.
+* **Top Section (Stats Panel):** Create a dark-themed container holding real-time trip metrics:
+  - Top Left: A glowing green dot and "TRIP ACTIVE" text.
+  - Middle: A prominent "NEXT STOP" section showing the name of the upcoming terminal (e.g., "42 Irbid Campus").
+  - Bottom Row (3 Metric Cards):
+    1. "Stops Done" (e.g., 1/4)
+    2. "On Board" (e.g., 5/15)
+    3. "Route" (e.g., 45% completion progress bar)
+* **Bottom Section (The Map):** - Render the Leaflet `MapContainer` taking up the remaining screen height.
+  - MUST force a Light Theme TileLayer (e.g., `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png`).
+  - Render the dynamic OSRM route polyline, the glowing student markers, and the simulated Bus marker.
+
+**Styling Constraints:**
+* Keep the sidebar and main app wrapper intact. This change only applies to the main content area of the "Route Map" route.
+* Use Tailwind CSS to style the top Stats Panel to match our existing "42 Intranet V2" dark UI (navy background, rounded borders, muted text for labels, bright cyan/pink for values).
+
+Please provide the completely rewritten code for the Driver's `RouteMap` component/page reflecting this new layout and conditional logic.
