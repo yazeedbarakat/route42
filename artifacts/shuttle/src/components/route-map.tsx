@@ -17,6 +17,7 @@ export interface CustomBooking {
   lat: number;
   lng: number;
   studentName: string;
+  studentEmail?: string;
 }
 
 export interface RouteMapProps {
@@ -310,9 +311,10 @@ function CustomBookingsLayer({ bookings }: { bookings: CustomBooking[] }) {
     bookings.forEach(b => {
       const m = L.marker([b.lat, b.lng], { icon: orangeMarkerIcon(), zIndexOffset: 700 }).addTo(map);
       m.bindPopup(
-        `<div style="font-family:Inter,sans-serif;background:#0f1420;border:1px solid rgba(251,146,60,.35);border-radius:12px;padding:12px 16px;box-shadow:0 0 20px rgba(251,146,60,.15);">
-          <div style="color:#fb923c;font-weight:700;font-size:14px;margin-bottom:4px;">🟠 Custom Pickup</div>
-          <div style="color:#fff;font-size:12px;">Passenger: <strong>${b.studentName}</strong></div>
+        `<div style="font-family:Inter,sans-serif;background:#0f1420;border:1px solid rgba(251,146,60,.35);border-radius:12px;padding:12px 16px;box-shadow:0 0 20px rgba(251,146,60,.15);min-width:170px;">
+          <div style="color:#fb923c;font-weight:700;font-size:13px;margin-bottom:6px;">🟠 Custom Pickup</div>
+          <div style="color:#fff;font-size:12px;font-weight:600;">${b.studentName}</div>
+          ${b.studentEmail ? `<div style="color:#a7b0c0;font-size:11px;margin-top:2px;">${b.studentEmail}</div>` : ""}
           <div style="color:#a7b0c0;font-size:10px;margin-top:6px;font-family:monospace;">${b.lat.toFixed(5)}, ${b.lng.toFixed(5)}</div>
         </div>`,
         { className: "rm-popup", closeButton: false }

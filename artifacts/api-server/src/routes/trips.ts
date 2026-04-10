@@ -230,6 +230,143 @@ router.get("/driver/trips", requireAuth, requireRole("driver", "admin"), async (
   res.json(result);
 });
 
+// ─── Driver: full trip list for today with individual passenger manifest ──────
+router.get("/driver/trips/today", requireAuth, requireRole("driver", "admin"), async (req, res): Promise<void> => {
+  const today = new Date().toISOString().split("T")[0];
+
+  await seedTripsForDate(today);
+
+  const trips = await db
+    .select()
+    .from(tripsTable)
+    .where(eq(tripsTable.date, today));
+
+  const result = [];
+  for (const trip of trips) {
+    const passengers = await db
+      .select({
+        bookingId: bookingsTable.id,
+        studentName: usersTable.name,
+        studentEmail: usersTable.email,
+        pickupType: bookingsTable.pickupType,
+        pickupName: bookingsTable.pickupName,
+        customLat: bookingsTable.customLat,
+        customLng: bookingsTable.customLng,
+        pickupPointName: pickupPointsTable.name,
+      })
+      .from(bookingsTable)
+      .innerJoin(usersTable, eq(bookingsTable.userId, usersTable.id))
+      .leftJoin(pickupPointsTable, eq(bookingsTable.pickupPointId, pickupPointsTable.id))
+      .where(
+        and(
+          eq(bookingsTable.tripId, trip.id),
+          sql`${bookingsTable.status} != 'canceled'`
+        )
+      );
+
+    result.push({
+      id: trip.id,
+      date: trip.date,
+      departureTime: trip.departureTime,
+      direction: trip.direction,
+      status: trip.status,
+      bookedSeats: trip.bookedSeats,
+      totalSeats: trip.totalSeats,
+      minBookingsToConfirm: trip.minBookingsToConfirm,
+      passengers: passengers.map(p => ({
+        bookingId: p.bookingId,
+        studentName: p.studentName,
+        studentEmail: p.studentEmail,
+        pickupType: p.pickupType,
+        pickupName: p.pickupType === "fixed" ? (p.pickupPointName ?? p.pickupName) : p.pickupName,
+        customLat: p.customLat ? parseFloat(p.customLat) : null,
+        customLng: p.customLng ? parseFloat(p.customLng) : null,
+      })),
+    });
+  }
+
+  res.json(result);
+});
+
+// ─── Driver: manually accept (force-confirm) a trip ──────────────────────────
+router.post("/driver/trips/:id/accept", requireAuth, requireRole("driver", "admin"), async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid trip ID" }); return; }
+
+  const [trip] = await db
+    .update(tripsTable)
+    .set({ status: "confirmed" })
+    .where(eq(tripsTable.id, id))
+    .returning();
+
+  if (!trip) { res.status(404).json({ error: "Trip not found" }); return; }
+
+  const pendingBookings = await db
+    .select()
+    .from(bookingsTable)
+    .where(and(eq(bookingsTable.tripId, id), eq(bookingsTable.status, "pending")));
+
+  if (pendingBookings.length > 0) {
+    await db
+      .update(bookingsTable)
+      .set({ status: "confirmed" })
+      .where(and(eq(bookingsTable.tripId, id), eq(bookingsTable.status, "pending")));
+
+    for (const booking of pendingBookings) {
+      await db.insert(notificationsTable).values({
+        userId: booking.userId,
+        message: `Your shuttle booking for ${trip.date} at ${trip.departureTime} has been CONFIRMED by the driver. Be ready at your pickup point.`,
+        type: "trip_confirmed",
+        isRead: false,
+      });
+    }
+  }
+
+  res.json(formatTrip(trip));
+});
+
+// ─── Driver: cancel a trip (emergency override) ───────────────────────────────
+router.post("/driver/trips/:id/cancel", requireAuth, requireRole("driver", "admin"), async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid trip ID" }); return; }
+
+  const [trip] = await db
+    .update(tripsTable)
+    .set({ status: "canceled" })
+    .where(eq(tripsTable.id, id))
+    .returning();
+
+  if (!trip) { res.status(404).json({ error: "Trip not found" }); return; }
+
+  const affectedBookings = await db
+    .select()
+    .from(bookingsTable)
+    .where(and(eq(bookingsTable.tripId, id), sql`${bookingsTable.status} != 'canceled'`));
+
+  if (affectedBookings.length > 0) {
+    await db
+      .update(bookingsTable)
+      .set({ status: "canceled" })
+      .where(eq(bookingsTable.tripId, id));
+
+    await db
+      .update(tripsTable)
+      .set({ bookedSeats: 0 })
+      .where(eq(tripsTable.id, id));
+
+    for (const booking of affectedBookings) {
+      await db.insert(notificationsTable).values({
+        userId: booking.userId,
+        message: `Your shuttle booking for ${trip.date} at ${trip.departureTime} has been CANCELED by the driver.`,
+        type: "trip_canceled",
+        isRead: false,
+      });
+    }
+  }
+
+  res.json(formatTrip(trip));
+});
+
 router.get("/pickup-points", requireAuth, async (_req, res): Promise<void> => {
   const points = await db.select().from(pickupPointsTable).orderBy(pickupPointsTable.routeOrder);
   res.json(points);

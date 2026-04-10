@@ -1,0 +1,25 @@
+Act as an expert Full-Stack Developer. I need to build specific Role-Based features for the "Driver Dashboard" in my "Smart Shuttle Solution" project, without affecting the Student experience.
+
+**Task 1: "Trip Info" & Passenger Manifest (Driver Only)**
+* Update or create the `DriverDashboard.jsx` component.
+* Add a "Current Trip Info" panel that displays the active/upcoming trip details (Time, Date, Direction).
+* Inside this panel, render a Passenger List (Manifest) showing all students booked for this specific trip. Display their Names and Phone Numbers in a clean table or list layout.
+
+**Task 2: Driver Trip Control (Manual Override)**
+* **Logic:** Trips are auto-confirmed by default if they hit the 5-passenger threshold. However, the driver needs manual control.
+* Add action buttons for the Driver:
+  1. If a trip has `< 5` students (status is "Pending"), show "Accept Trip" and "Cancel Trip" buttons. The driver can manually force-confirm it even with few students.
+  2. If a trip is already "Confirmed" (default or >= 5 students), show a "Cancel Trip" button just in case of an emergency.
+* Provide the necessary Backend API update (e.g., `PATCH /api/trips/:id/status`) to handle these driver overrides.
+
+**Task 3: Driver-Specific Map View (`InteractiveMap.jsx`)**
+* The driver needs to see where every student is waiting. 
+* Pass a `userRole="driver"` prop and a `bookings` array prop into the `InteractiveMap` component.
+* **Conditional Rendering:** If `userRole === 'driver'`, map through the `bookings` array and render a distinct marker (e.g., a small glowing yellow/orange dot) for EVERY student's pickup location (whether it's a fixed terminal or a custom on-route point).
+* When the driver clicks a student's marker, show a native dark-themed Popup displaying: [Student Name] and [Phone Number].
+* **CRITICAL CONSTRAINT:** Do NOT break or alter the map's behavior for Students. Students should NOT see other students' markers. The core OSRM routing, terminal tooltips, and bus animation must remain exactly as they are.
+
+**Design:**
+Ensure all new UI elements (Passenger list, Accept/Cancel buttons, and Driver map popups) strictly follow the existing "42 Intranet V2" dark navy theme, using pink/cyan neon accents and rounded corners.
+
+Please provide the updated `DriverDashboard` code, the backend status update logic, and the precise conditional rendering changes needed inside `InteractiveMap.jsx`.
