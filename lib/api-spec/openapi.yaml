@@ -596,9 +596,18 @@ components:
           type: integer
         pickupPointId:
           type: integer
+        pickupType:
+          type: string
+          enum: [fixed, custom]
+        pickupName:
+          type: string
+        customLat:
+          type: number
+        customLng:
+          type: number
         status:
           type: string
-          enum: [pending, confirmed, canceled]
+          enum: [pending, confirmed, canceled, waiting]
         createdAt:
           type: string
         trip:
@@ -611,8 +620,8 @@ components:
         - id
         - userId
         - tripId
-        - pickupPointId
         - status
+        - pickupType
         - createdAt
 
     CreateBookingBody:

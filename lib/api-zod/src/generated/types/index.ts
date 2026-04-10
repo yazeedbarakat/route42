@@ -8,6 +8,7 @@
 
 export * from "./authResponse";
 export * from "./booking";
+export * from "./bookingPickupType";
 export * from "./bookingStatus";
 export * from "./createBookingBody";
 export * from "./dashboardStats";

@@ -120,8 +120,12 @@ export const GetBookingsResponseItem = zod.object({
   id: zod.number(),
   userId: zod.number(),
   tripId: zod.number(),
-  pickupPointId: zod.number(),
-  status: zod.enum(["pending", "confirmed", "canceled"]),
+  pickupPointId: zod.number().optional(),
+  pickupType: zod.enum(["fixed", "custom"]),
+  pickupName: zod.string().optional(),
+  customLat: zod.number().optional(),
+  customLng: zod.number().optional(),
+  status: zod.enum(["pending", "confirmed", "canceled", "waiting"]),
   createdAt: zod.string(),
   trip: zod
     .object({
@@ -163,11 +167,7 @@ export const GetBookingsResponse = zod.array(GetBookingsResponseItem);
  */
 export const CreateBookingBody = zod.object({
   tripId: zod.number(),
-  pickupType: zod.enum(["fixed", "custom"]).default("custom"),
-  pickupPointId: zod.number().optional(),
-  pickupName: zod.string().optional(),
-  customLat: zod.number().optional(),
-  customLng: zod.number().optional(),
+  pickupPointId: zod.number(),
 });
 
 /**
@@ -181,8 +181,12 @@ export const GetBookingResponse = zod.object({
   id: zod.number(),
   userId: zod.number(),
   tripId: zod.number(),
-  pickupPointId: zod.number(),
-  status: zod.enum(["pending", "confirmed", "canceled"]),
+  pickupPointId: zod.number().optional(),
+  pickupType: zod.enum(["fixed", "custom"]),
+  pickupName: zod.string().optional(),
+  customLat: zod.number().optional(),
+  customLng: zod.number().optional(),
+  status: zod.enum(["pending", "confirmed", "canceled", "waiting"]),
   createdAt: zod.string(),
   trip: zod
     .object({
@@ -229,8 +233,12 @@ export const CancelBookingResponse = zod.object({
   id: zod.number(),
   userId: zod.number(),
   tripId: zod.number(),
-  pickupPointId: zod.number(),
-  status: zod.enum(["pending", "confirmed", "canceled"]),
+  pickupPointId: zod.number().optional(),
+  pickupType: zod.enum(["fixed", "custom"]),
+  pickupName: zod.string().optional(),
+  customLat: zod.number().optional(),
+  customLng: zod.number().optional(),
+  status: zod.enum(["pending", "confirmed", "canceled", "waiting"]),
   createdAt: zod.string(),
   trip: zod
     .object({
@@ -273,8 +281,12 @@ export const GetBookingHistoryResponseItem = zod.object({
   id: zod.number(),
   userId: zod.number(),
   tripId: zod.number(),
-  pickupPointId: zod.number(),
-  status: zod.enum(["pending", "confirmed", "canceled"]),
+  pickupPointId: zod.number().optional(),
+  pickupType: zod.enum(["fixed", "custom"]),
+  pickupName: zod.string().optional(),
+  customLat: zod.number().optional(),
+  customLng: zod.number().optional(),
+  status: zod.enum(["pending", "confirmed", "canceled", "waiting"]),
   createdAt: zod.string(),
   trip: zod
     .object({
@@ -326,8 +338,12 @@ export const GetAdminBookingsResponseItem = zod.object({
   id: zod.number(),
   userId: zod.number(),
   tripId: zod.number(),
-  pickupPointId: zod.number(),
-  status: zod.enum(["pending", "confirmed", "canceled"]),
+  pickupPointId: zod.number().optional(),
+  pickupType: zod.enum(["fixed", "custom"]),
+  pickupName: zod.string().optional(),
+  customLat: zod.number().optional(),
+  customLng: zod.number().optional(),
+  status: zod.enum(["pending", "confirmed", "canceled", "waiting"]),
   createdAt: zod.string(),
   trip: zod
     .object({

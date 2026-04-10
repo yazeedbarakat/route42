@@ -96,19 +96,32 @@ export interface Trip {
   createdAt: string;
 }
 
+export type BookingPickupType =
+  (typeof BookingPickupType)[keyof typeof BookingPickupType];
+
+export const BookingPickupType = {
+  fixed: "fixed",
+  custom: "custom",
+} as const;
+
 export type BookingStatus = (typeof BookingStatus)[keyof typeof BookingStatus];
 
 export const BookingStatus = {
   pending: "pending",
   confirmed: "confirmed",
   canceled: "canceled",
+  waiting: "waiting",
 } as const;
 
 export interface Booking {
   id: number;
   userId: number;
   tripId: number;
-  pickupPointId: number;
+  pickupPointId?: number;
+  pickupType: BookingPickupType;
+  pickupName?: string;
+  customLat?: number;
+  customLng?: number;
   status: BookingStatus;
   createdAt: string;
   trip?: Trip;
@@ -118,11 +131,7 @@ export interface Booking {
 
 export interface CreateBookingBody {
   tripId: number;
-  pickupType: "fixed" | "custom";
-  pickupPointId?: number;
-  pickupName?: string;
-  customLat?: number;
-  customLng?: number;
+  pickupPointId: number;
 }
 
 export type DriverTripDirection =
