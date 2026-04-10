@@ -256,7 +256,7 @@ function TripCard({
             </button>
           )}
 
-          {hasPassengers && (
+          {trip.status === "confirmed" && (
             <button
               onClick={() => onStartTrip(trip.id)}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
