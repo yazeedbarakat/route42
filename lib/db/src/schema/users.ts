@@ -9,6 +9,9 @@ export const usersTable = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   role: text("role").notNull().default("student"),
   phone: text("phone"),
+  // Unique driver identifier — set only for driver accounts created by admin.
+  // Drivers authenticate with this ID alone (no email/password required).
+  driverId: text("driver_id").unique(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

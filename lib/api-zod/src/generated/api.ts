@@ -51,6 +51,33 @@ export const RegisterBody = zod.object({
 });
 
 /**
+ * @summary Driver login — accepts only a driverId, no password required.
+ * Drivers are created by admin and authenticate via their unique Driver ID.
+ */
+export const DriverLoginBody = zod.object({
+  driverId: zod.string().min(1, "Driver ID is required"),
+});
+
+/**
+ * @summary Admin: add/register a new driver account
+ */
+export const AddDriverBody = zod.object({
+  name: zod.string().min(1, "Name is required"),
+  phone: zod.string().min(1, "Phone is required"),
+  driverId: zod.string().min(1, "Driver ID is required"),
+});
+
+export const AddDriverResponse = zod.object({
+  success: zod.boolean(),
+  driver: zod.object({
+    id: zod.number(),
+    name: zod.string(),
+    driverId: zod.string(),
+    phone: zod.string().optional(),
+  }),
+});
+
+/**
  * @summary Logout user
  */
 export const LogoutResponse = zod.object({

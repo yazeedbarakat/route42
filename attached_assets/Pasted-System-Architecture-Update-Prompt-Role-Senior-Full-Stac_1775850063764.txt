@@ -1,0 +1,46 @@
+System Architecture Update Prompt
+
+Role: Senior Full-Stack Developer
+Context: I have an existing transportation system and I need to overhaul the User Roles and Authentication logic.
+
+Task: Please implement the following changes to the current codebase:
+
+1. Registration & User Roles:
+
+    Restrict Registration: Disable the ability for "Drivers" to create their own accounts. The registration page must only allow Student and Admin sign-ups.
+
+    Optional Phone Number: In the registration form, add a "Phone Number" field and ensure it is Optional (not required).
+
+    Registration Constraints: Maintain the student email validation (must end in @learner.42.tech).
+
+    Important: Do not modify the existing login logic for Students and Admins.
+
+2. Admin Dashboard & Driver Management:
+
+    Admin-Only Feature: Create a dedicated section in the Admin Panel to "Add/Register New Drivers".
+
+    Driver Data: When an Admin adds a driver, the form should require: Driver Name, Phone Number, and a unique Driver ID.
+
+    Storage: Ensure these drivers are stored in the database with a "Driver" role associated with their unique Driver ID.
+
+3. Driver Authentication Flow:
+
+    Simplified Login: Create a specific login path/form for Drivers.
+
+    Single-Field Auth: For the Driver role only, allow them to log in using only their Driver ID. No email or password should be required for drivers to access their dashboard.
+
+4. Additional Logic & UI Fixes:
+
+    Sign Out Bug: Fix the existing "Sign Out" functionality. It must clear all local sessions/tokens and redirect the user back to the login screen.
+
+    Dynamic Labels: On the student interface, if the trip destination is "Home" (leaving 42), change the action button label from "Pickup" to "Get Off".
+
+    Bus Station Logic: If a user selects an official Bus Hub/Station, the "Custom Pickup" option must be automatically disabled.
+
+Requirements:
+
+    Modify the existing database schemas and authentication controllers.
+
+    Add clear comments explaining the new Driver ID login logic.
+
+    Ensure the UI updates are consistent with the current design.

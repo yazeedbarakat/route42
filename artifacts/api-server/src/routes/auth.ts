@@ -1,12 +1,13 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
 import { db, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
-import { LoginBody, RegisterBody } from "@workspace/api-zod";
-import { signToken, requireAuth } from "../lib/auth";
+import { eq, and } from "drizzle-orm";
+import { LoginBody, RegisterBody, DriverLoginBody, AddDriverBody } from "@workspace/api-zod";
+import { signToken, requireAuth, requireRole } from "../lib/auth";
 
 const router: IRouter = Router();
 
+// ─── Standard email/password login (students & admins) ───────────────────────
 router.post("/auth/login", async (req, res): Promise<void> => {
   const parsed = LoginBody.safeParse(req.body);
   if (!parsed.success) {
@@ -41,6 +42,44 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   });
 });
 
+// ─── Driver ID login ──────────────────────────────────────────────────────────
+// Drivers do not use email/password — they authenticate with their unique
+// Driver ID that was assigned by an admin when the account was created.
+router.post("/auth/driver-login", async (req, res): Promise<void> => {
+  const parsed = DriverLoginBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Driver ID is required" });
+    return;
+  }
+
+  const { driverId } = parsed.data;
+
+  // Look up a user whose driverId matches AND whose role is 'driver'
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(and(eq(usersTable.driverId, driverId), eq(usersTable.role, "driver")));
+
+  if (!user) {
+    res.status(401).json({ error: "Invalid Driver ID" });
+    return;
+  }
+
+  const token = signToken({ userId: user.id, role: user.role, email: user.email });
+  res.json({
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      createdAt: user.createdAt.toISOString(),
+    },
+    token,
+  });
+});
+
+// ─── Public self-registration (students & admins only) ───────────────────────
+// Drivers are NOT allowed to self-register; they are created by admin only.
 router.post("/auth/register", async (req, res): Promise<void> => {
   const parsed = RegisterBody.safeParse(req.body);
   if (!parsed.success) {
@@ -48,8 +87,13 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
-  // Extract phone separately — it passes through the Zod schema as optional
   const { name, email, password, role, phone } = parsed.data;
+
+  // Prevent driver self-registration through the public endpoint
+  if (role === "driver") {
+    res.status(403).json({ error: "Driver accounts must be created by an administrator." });
+    return;
+  }
 
   const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, email));
   if (existing) {
@@ -75,6 +119,66 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     token,
   });
 });
+
+// ─── Admin: add a new driver account ─────────────────────────────────────────
+// Only admins can create driver accounts. Drivers authenticate via Driver ID,
+// so we auto-generate a placeholder email and a random password hash.
+router.post(
+  "/auth/admin/add-driver",
+  requireAuth,
+  requireRole("admin"),
+  async (req, res): Promise<void> => {
+    const parsed = AddDriverBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+
+    const { name, phone, driverId } = parsed.data;
+
+    // Ensure the Driver ID is not already taken
+    const [existingDriver] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.driverId, driverId));
+
+    if (existingDriver) {
+      res.status(400).json({ error: "A driver with this ID already exists." });
+      return;
+    }
+
+    // Auto-generate a unique internal email (not exposed to the driver)
+    const internalEmail = `driver_${driverId.toLowerCase().replace(/\s+/g, "_")}@internal.shuttle`;
+
+    // Generate a random password hash — drivers never use this to log in
+    const placeholderPasswordHash = await bcrypt.hash(
+      `driver-${driverId}-${Date.now()}`,
+      10,
+    );
+
+    const [user] = await db
+      .insert(usersTable)
+      .values({
+        name,
+        email: internalEmail,
+        passwordHash: placeholderPasswordHash,
+        role: "driver",
+        phone,
+        driverId,
+      })
+      .returning();
+
+    res.status(201).json({
+      success: true,
+      driver: {
+        id: user.id,
+        name: user.name,
+        driverId: user.driverId!,
+        phone: user.phone ?? undefined,
+      },
+    });
+  },
+);
 
 router.post("/auth/logout", (_req, res): Promise<void> => {
   res.json({ success: true, message: "Logged out" });
