@@ -5,8 +5,13 @@
  * Smart Shuttle Solution API for 42 Irbid Hackathon
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateBookingBodyPickupType } from "./createBookingBodyPickupType";
 
 export interface CreateBookingBody {
   tripId: number;
-  pickupPointId: number;
+  pickupType: CreateBookingBodyPickupType;
+  pickupPointId?: number;
+  pickupName?: string;
+  customLat?: number;
+  customLng?: number;
 }

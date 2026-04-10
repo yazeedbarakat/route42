@@ -129,9 +129,21 @@ export interface Booking {
   user?: User;
 }
 
+export type CreateBookingBodyPickupType =
+  (typeof CreateBookingBodyPickupType)[keyof typeof CreateBookingBodyPickupType];
+
+export const CreateBookingBodyPickupType = {
+  fixed: "fixed",
+  custom: "custom",
+} as const;
+
 export interface CreateBookingBody {
   tripId: number;
-  pickupPointId: number;
+  pickupType: CreateBookingBodyPickupType;
+  pickupPointId?: number;
+  pickupName?: string;
+  customLat?: number;
+  customLng?: number;
 }
 
 export type DriverTripDirection =

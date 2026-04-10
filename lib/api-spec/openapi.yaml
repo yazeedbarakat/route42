@@ -629,11 +629,20 @@ components:
       properties:
         tripId:
           type: integer
+        pickupType:
+          type: string
+          enum: [fixed, custom]
         pickupPointId:
           type: integer
+        pickupName:
+          type: string
+        customLat:
+          type: number
+        customLng:
+          type: number
       required:
         - tripId
-        - pickupPointId
+        - pickupType
 
     DriverTrip:
       type: object

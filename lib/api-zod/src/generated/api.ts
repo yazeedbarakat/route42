@@ -167,7 +167,11 @@ export const GetBookingsResponse = zod.array(GetBookingsResponseItem);
  */
 export const CreateBookingBody = zod.object({
   tripId: zod.number(),
-  pickupPointId: zod.number(),
+  pickupType: zod.enum(["fixed", "custom"]),
+  pickupPointId: zod.number().optional(),
+  pickupName: zod.string().optional(),
+  customLat: zod.number().optional(),
+  customLng: zod.number().optional(),
 });
 
 /**

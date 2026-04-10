@@ -11,6 +11,7 @@ export * from "./booking";
 export * from "./bookingPickupType";
 export * from "./bookingStatus";
 export * from "./createBookingBody";
+export * from "./createBookingBodyPickupType";
 export * from "./dashboardStats";
 export * from "./driverTrip";
 export * from "./driverTripDirection";
