@@ -38,7 +38,7 @@ export interface RouteMapProps {
 // ─── Terminals & Route ────────────────────────────────────────────────────────
 export const TERMINALS = [
   { id: 1, name: "Northern Terminal",  nameAr: "مجمع الشمالي",       lat: 32.568219717501016, lng: 35.85560315169505  },
-  { id: 2, name: "Al-Ghour Terminal",  nameAr: "مجمع الغور الجديد",  lat: 32.55064060061745,  lng: 35.8361863228588   },
+  { id: 2, name: "Al-Ghour Terminal",  nameAr: "مجمع الغور الجديد",  lat: 32.5510273259837,   lng: 35.838026446580656 },
   { id: 3, name: "Sheikh Khalil",      nameAr: "مجمع الشيخ خليل",    lat: 32.55034219324052,  lng: 35.85550052285881  },
   { id: 4, name: "Amman Terminal",     nameAr: "مجمع عمان",           lat: 32.535047165765235, lng: 35.869768897719915 },
   { id: 5, name: "دوار الدرة",         nameAr: "دوار الدرة",          lat: 32.55824371537429,  lng: 35.87344062736422  },
@@ -148,40 +148,12 @@ function orangeMarkerIcon() {
   });
 }
 
-// ─── Styles (dark popup + permanent label tooltips) ────────────────────────────
+// ─── Styles (dark popups) ─────────────────────────────────────────────────────
 const POPUP_CSS = `
 .rm-popup .leaflet-popup-content-wrapper{background:transparent!important;border:none!important;box-shadow:none!important;padding:0!important;}
 .rm-popup .leaflet-popup-content{margin:0!important;}
 .rm-popup .leaflet-popup-tip-container{display:none!important;}
 .leaflet-container{background:#0a0e17!important;}
-.rm-label{
-  background:#0d1420 !important;
-  border:1px solid rgba(34,211,238,.35) !important;
-  border-radius:6px !important;
-  color:#22d3ee !important;
-  font-family:Inter,sans-serif !important;
-  font-size:11px !important;
-  font-weight:600 !important;
-  padding:3px 7px !important;
-  white-space:nowrap !important;
-  box-shadow:0 0 10px rgba(34,211,238,.2) !important;
-  pointer-events:none !important;
-}
-.rm-label::before{display:none !important;}
-.rm-label-dest{
-  background:#0d1420 !important;
-  border:1px solid rgba(255,46,136,.35) !important;
-  border-radius:6px !important;
-  color:#ff2e88 !important;
-  font-family:Inter,sans-serif !important;
-  font-size:11px !important;
-  font-weight:700 !important;
-  padding:3px 7px !important;
-  white-space:nowrap !important;
-  box-shadow:0 0 10px rgba(255,46,136,.2) !important;
-  pointer-events:none !important;
-}
-.rm-label-dest::before{display:none !important;}
 `;
 
 // ─── Child Components ─────────────────────────────────────────────────────────
@@ -249,14 +221,6 @@ function TerminalMarkers({
     TERMINALS.forEach((t, i) => {
       const m = L.marker([t.lat, t.lng], { icon: cyanMarkerIcon(), zIndexOffset: 500 }).addTo(map);
 
-      // Permanent visible label
-      m.bindTooltip(t.nameAr, {
-        permanent: true,
-        direction: "top",
-        className: "rm-label",
-        offset: [0, -12],
-      });
-
       m.bindPopup(
         `<div style="font-family:Inter,sans-serif;background:#0f1420;border:1px solid rgba(34,211,238,.3);border-radius:12px;padding:12px 16px;box-shadow:0 0 20px rgba(34,211,238,.15);min-width:160px;">
           <div style="color:#22d3ee;font-weight:700;font-size:14px;margin-bottom:4px;">${t.name}</div>
@@ -276,14 +240,6 @@ function TerminalMarkers({
     });
 
     const dm = L.marker([DESTINATION.lat, DESTINATION.lng], { icon: destIcon(), zIndexOffset: 600 }).addTo(map);
-
-    // Permanent label for destination
-    dm.bindTooltip("42 Irbid 🎯", {
-      permanent: true,
-      direction: "top",
-      className: "rm-label-dest",
-      offset: [0, -13],
-    });
 
     dm.bindPopup(
       `<div style="font-family:Inter,sans-serif;background:#0f1420;border:1px solid rgba(255,46,136,.3);border-radius:12px;padding:12px 16px;">
