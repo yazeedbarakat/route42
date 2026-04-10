@@ -40,9 +40,50 @@ interface DriverTripToday {
   passengers: Passenger[];
 }
 
+interface PickupPoint {
+  id: number;
+  name: string;
+  lat: number;
+  lng: number;
+  routeOrder: number;
+}
+
+function fixedPickupToRouteStop(passenger: Passenger, pickupPoints: PickupPoint[]): CustomBooking | null {
+  if (passenger.pickupType === "custom" && passenger.customLat != null && passenger.customLng != null) {
+    return {
+      lat: passenger.customLat,
+      lng: passenger.customLng,
+      studentName: passenger.studentName,
+      studentEmail: passenger.studentEmail,
+    };
+  }
+
+  const normalizedPickup = (passenger.pickupName ?? "").toLowerCase();
+  const pickupPoint = pickupPoints.find(p => normalizedPickup.includes(p.name.toLowerCase()));
+  const terminal = pickupPoint ?? TERMINALS.find(t =>
+    normalizedPickup.includes(t.name.toLowerCase()) ||
+    normalizedPickup.includes(t.nameAr.toLowerCase())
+  );
+
+  if (!terminal) return null;
+
+  return {
+    lat: terminal.lat,
+    lng: terminal.lng,
+    studentName: passenger.studentName,
+    studentEmail: passenger.studentEmail,
+  };
+}
+
 // ─── DriverMapView ─────────────────────────────────────────────────────────────
 function DriverMapView() {
-  const [isStarted, setIsStarted] = useState(false);
+  const params = new URLSearchParams(window.location.search);
+  const requestedTripId = Number(params.get("tripId"));
+  const selectedTripId = Number.isFinite(requestedTripId) && requestedTripId > 0 ? requestedTripId : null;
+  const today = format(new Date(), "yyyy-MM-dd");
+  const routeDate = params.get("date") ?? today;
+  const shouldAutoStart = params.get("start") === "1";
+  const [isStarted, setIsStarted] = useState(shouldAutoStart);
   const [driverStatus, setDriverStatus] = useState({
     nextStopName: "",
     passedStops: 0,
@@ -52,23 +93,28 @@ function DriverMapView() {
     progress: 0,
   });
 
-  const today = format(new Date(), "yyyy-MM-dd");
   const { data: trips = [], isLoading } = useQuery<DriverTripToday[]>({
-    queryKey: ["driver-trips-map", today],
-    queryFn: () => customFetch<DriverTripToday[]>(`/api/driver/trips/today?date=${today}`),
+    queryKey: ["driver-trips-map", routeDate],
+    queryFn: () => customFetch<DriverTripToday[]>(`/api/driver/trips/today?date=${routeDate}`),
     refetchInterval: 30_000,
   });
+  const { data: pickupPoints = [] } = useQuery<PickupPoint[]>({
+    queryKey: ["driver-route-pickup-points"],
+    queryFn: () => customFetch<PickupPoint[]>("/api/pickup-points"),
+  });
 
-  const activeTrip = trips.find(t => t.status === "confirmed") ?? null;
+  const activeTrip = selectedTripId
+    ? trips.find(t => t.id === selectedTripId && t.status === "confirmed") ?? null
+    : trips.find(t => t.status === "confirmed") ?? null;
 
-  const customMarkers: CustomBooking[] = (activeTrip?.passengers ?? [])
-    .filter(p => p.pickupType === "custom" && p.customLat != null && p.customLng != null)
-    .map(p => ({
-      lat: p.customLat!,
-      lng: p.customLng!,
-      studentName: p.studentName,
-      studentEmail: p.studentEmail,
-    }));
+  // Driver-only map data handoff: the Start Trip button passes tripId/date in
+  // the URL, then this view fetches that trip and converts every resolvable
+  // passenger pickup into the shared RouteMap customBookings prop. Custom
+  // pickups use their saved lat/lng, while fixed pickups are translated through
+  // the existing pickup point data before RouteMap builds the OSRM route.
+  const routeStops: CustomBooking[] = (activeTrip?.passengers ?? [])
+    .map(passenger => fixedPickupToRouteStop(passenger, pickupPoints))
+    .filter((stop): stop is CustomBooking => stop !== null);
 
   const handleDriverProgress = useCallback((info: DriverProgressInfo) => {
     setDriverStatus({
@@ -99,7 +145,7 @@ function DriverMapView() {
           <h1 className="text-2xl font-bold text-white">Route Map</h1>
           <p className="text-[#a7b0c0] text-sm mt-0.5 flex items-center gap-1.5">
             <MapIcon size={13} className="text-[#a7b0c0]" />
-            No confirmed trip today — map is idle
+            {selectedTripId ? "Selected trip is unavailable or not confirmed" : "No confirmed trip for this date — map is idle"}
           </p>
         </div>
 
@@ -118,7 +164,7 @@ function DriverMapView() {
 
   // ── Confirmed trip → navigation dashboard ──────────────────────────────────
   const totalPassengers = activeTrip.passengers.length;
-  const totalStops      = customMarkers.length || totalPassengers;
+  const totalStops      = routeStops.length || totalPassengers;
 
   const stopsDisplay      = isStarted
     ? `${driverStatus.passedStops} / ${driverStatus.totalStops}`
@@ -219,7 +265,7 @@ function DriverMapView() {
         <RouteMap
           height="calc(100vh - 360px)"
           showBus={false}
-          customBookings={customMarkers}
+          customBookings={routeStops}
           userRole="driver"
           isTripActive={isStarted}
           animateRoute={isStarted}

@@ -52,6 +52,10 @@ JWT stored in `localStorage` as `shuttle_token`. Token passed via `setAuthTokenG
 
 When `bookedSeats >= minBookingsToConfirm` (default 5), trip status changes to "confirmed" and all booked students receive a notification.
 
+## Driver Routing
+
+The Driver Dashboard `Start Trip` action opens `/map` with the selected trip id/date. The driver-only route view fetches that trip, resolves fixed pickup points plus custom pickup coordinates, and passes them to the shared Leaflet/OSRM `RouteMap` component for live driver navigation.
+
 ## Key Commands
 
 - `pnpm run typecheck` — full typecheck across all packages

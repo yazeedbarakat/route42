@@ -494,7 +494,11 @@ export default function DriverDashboard() {
   const canceledTrips = trips?.filter(t => t.status === "canceled") ?? [];
 
   const handleStartTrip = (id: number) => {
-    setActiveTrip(prev => (prev === id ? null : id));
+    setActiveTrip(id);
+    // Driver-only routing handoff: pass the selected trip id/date to /map so
+    // DriverMapView can fetch that same trip and convert its passenger pickup
+    // coordinates into the RouteMap customBookings data used by the pickup map.
+    setLocation(`/map?tripId=${id}&date=${selectedDate.iso}&start=1`);
   };
 
   return (
@@ -580,7 +584,7 @@ export default function DriverDashboard() {
               <span className="w-2 h-2 rounded-full bg-emerald-400" /> Confirmed (cancel if emergency)
             </span>
             <span className="flex items-center gap-1.5">
-              <Zap size={10} className="text-[#22d3ee]" /> Start Trip to highlight route on map
+              <Zap size={10} className="text-[#22d3ee]" /> Start Trip opens live route navigation
             </span>
           </div>
 
