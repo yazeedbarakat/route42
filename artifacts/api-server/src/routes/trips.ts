@@ -331,6 +331,103 @@ router.post("/driver/trips/:id/accept", requireAuth, requireRole("driver", "admi
   res.json(formatTrip(trip));
 });
 
+// ─── Driver: start a trip (sets status to in_progress) ───────────────────────
+router.post("/driver/trips/:id/start", requireAuth, requireRole("driver", "admin"), async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid trip ID" }); return; }
+
+  const [trip] = await db
+    .update(tripsTable)
+    .set({ status: "in_progress" })
+    .where(eq(tripsTable.id, id))
+    .returning();
+
+  if (!trip) { res.status(404).json({ error: "Trip not found" }); return; }
+
+  res.json(formatTrip(trip));
+});
+
+// ─── Student: get currently active (in_progress) trip ─────────────────────────
+router.get("/student/active-trip", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.user?.userId;
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const studentBookings = await db
+    .select({ tripId: bookingsTable.tripId })
+    .from(bookingsTable)
+    .where(
+      and(
+        eq(bookingsTable.userId, userId),
+        sql`${bookingsTable.status} != 'canceled'`
+      )
+    );
+
+  if (studentBookings.length === 0) {
+    res.json({ status: "not_started" });
+    return;
+  }
+
+  const tripIds = studentBookings.map(b => b.tripId).filter((id): id is number => id !== null);
+
+  const activeTrips = await db
+    .select()
+    .from(tripsTable)
+    .where(
+      and(
+        eq(tripsTable.status, "in_progress"),
+        eq(tripsTable.date, today)
+      )
+    );
+
+  const activeTrip = activeTrips.find(t => tripIds.includes(t.id));
+  if (!activeTrip) {
+    res.json({ status: "not_started" });
+    return;
+  }
+
+  const passengers = await db
+    .select({
+      bookingId: bookingsTable.id,
+      studentName: usersTable.name,
+      studentEmail: usersTable.email,
+      pickupType: bookingsTable.pickupType,
+      pickupName: bookingsTable.pickupName,
+      customLat: bookingsTable.customLat,
+      customLng: bookingsTable.customLng,
+      pickupPointName: pickupPointsTable.name,
+    })
+    .from(bookingsTable)
+    .innerJoin(usersTable, eq(bookingsTable.userId, usersTable.id))
+    .leftJoin(pickupPointsTable, eq(bookingsTable.pickupPointId, pickupPointsTable.id))
+    .where(
+      and(
+        eq(bookingsTable.tripId, activeTrip.id),
+        sql`${bookingsTable.status} != 'canceled'`
+      )
+    );
+
+  res.json({
+    status: "in_progress",
+    trip: {
+      id: activeTrip.id,
+      date: activeTrip.date,
+      departureTime: activeTrip.departureTime,
+      direction: activeTrip.direction,
+      passengers: passengers.map(p => ({
+        bookingId: p.bookingId,
+        studentName: p.studentName,
+        studentEmail: p.studentEmail,
+        pickupType: p.pickupType,
+        pickupName: p.pickupType === "fixed" ? (p.pickupPointName ?? p.pickupName) : p.pickupName,
+        customLat: p.customLat ? parseFloat(p.customLat) : null,
+        customLng: p.customLng ? parseFloat(p.customLng) : null,
+      })),
+    },
+  });
+});
+
 // ─── Driver: cancel a trip (emergency override) ───────────────────────────────
 router.post("/driver/trips/:id/cancel", requireAuth, requireRole("driver", "admin"), async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);

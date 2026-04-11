@@ -114,10 +114,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 flex flex-col
+        fixed inset-y-0 left-0 z-[999] w-64 flex flex-col
         bg-[#090d14] border-r border-white/[0.06]
         transform transition-transform duration-300 ease-in-out
-        md:relative md:translate-x-0 md:flex
+        md:relative md:translate-x-0 md:flex md:z-[999]
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}
       `}>
         {/* Logo */}

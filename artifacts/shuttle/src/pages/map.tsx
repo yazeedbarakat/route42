@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   RouteMap,
@@ -13,15 +13,15 @@ import {
 } from "@/components/route-map";
 import {
   Bus, Navigation, Clock, Wifi, MapPin, X,
-  Play, Loader2, MapIcon,
+  Play, Loader2, MapIcon, Radio, CheckCircle2,
 } from "lucide-react";
 
-// ─── Driver types (mirrored from driver.tsx) ──────────────────────────────────
+// ─── Shared passenger types ───────────────────────────────────────────────────
 interface Passenger {
   bookingId: number;
   studentName: string;
   studentEmail: string;
-  studentPhone: string | null;
+  studentPhone?: string | null;
   pickupType: "fixed" | "custom";
   pickupName: string | null;
   customLat: number | null;
@@ -33,7 +33,7 @@ interface DriverTripToday {
   date: string;
   departureTime: string;
   direction: string;
-  status: "pending" | "confirmed" | "canceled";
+  status: "pending" | "confirmed" | "canceled" | "in_progress";
   bookedSeats: number;
   totalSeats: number;
   minBookingsToConfirm: number;
@@ -48,6 +48,17 @@ interface PickupPoint {
   routeOrder: number;
 }
 
+interface ActiveTripResponse {
+  status: "not_started" | "in_progress";
+  trip?: {
+    id: number;
+    date: string;
+    departureTime: string;
+    direction: string;
+    passengers: Passenger[];
+  };
+}
+
 function fixedPickupToRouteStop(passenger: Passenger, pickupPoints: PickupPoint[]): CustomBooking | null {
   if (passenger.pickupType === "custom" && passenger.customLat != null && passenger.customLng != null) {
     return {
@@ -60,7 +71,6 @@ function fixedPickupToRouteStop(passenger: Passenger, pickupPoints: PickupPoint[
 
   const normalizedPickup = (passenger.pickupName ?? "").toLowerCase();
   const pickupPoint = pickupPoints.find(p => normalizedPickup.includes(p.name.toLowerCase()));
-  // Fixed passenger stops resolve through DB-managed official terminals first.
   const terminal = pickupPoint ?? TERMINALS.find(t =>
     normalizedPickup.includes(t.name.toLowerCase()) ||
     normalizedPickup.includes(t.nameAr.toLowerCase())
@@ -104,18 +114,25 @@ function DriverMapView() {
     queryFn: () => customFetch<PickupPoint[]>("/api/pickup-points"),
   });
 
-  const activeTrip = selectedTripId
-    ? trips.find(t => t.id === selectedTripId && t.status === "confirmed") ?? null
-    : trips.find(t => t.status === "confirmed") ?? null;
+  const startTripMutation = useMutation({
+    mutationFn: (id: number) =>
+      customFetch(`/api/driver/trips/${id}/start`, { method: "POST" }),
+  });
 
-  // Driver-only map data handoff: the Start Trip button passes tripId/date in
-  // the URL, then this view fetches that trip and converts every resolvable
-  // passenger pickup into the shared RouteMap customBookings prop. Custom
-  // pickups use their saved lat/lng, while fixed pickups are translated through
-  // the existing pickup point data before RouteMap builds the OSRM route.
+  const activeTrip = selectedTripId
+    ? trips.find(t => t.id === selectedTripId && t.status !== "canceled") ?? null
+    : trips.find(t => t.status === "confirmed" || t.status === "in_progress") ?? null;
+
   const routeStops: CustomBooking[] = (activeTrip?.passengers ?? [])
     .map(passenger => fixedPickupToRouteStop(passenger, pickupPoints))
     .filter((stop): stop is CustomBooking => stop !== null);
+
+  const handleStartNavigation = useCallback(() => {
+    setIsStarted(true);
+    if (activeTrip) {
+      startTripMutation.mutate(activeTrip.id);
+    }
+  }, [activeTrip]);
 
   const handleDriverProgress = useCallback((info: DriverProgressInfo) => {
     setDriverStatus({
@@ -128,7 +145,14 @@ function DriverMapView() {
     });
   }, []);
 
-  // ── Loading ────────────────────────────────────────────────────────────────
+  // Auto-start when navigating from driver dashboard with ?start=1
+  useEffect(() => {
+    if (shouldAutoStart && activeTrip && !isStarted) {
+      handleStartNavigation();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTrip?.id]);
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
@@ -138,7 +162,6 @@ function DriverMapView() {
     );
   }
 
-  // ── No confirmed trip → empty light map ────────────────────────────────────
   if (!activeTrip) {
     return (
       <div className="flex flex-col gap-4">
@@ -163,37 +186,21 @@ function DriverMapView() {
     );
   }
 
-  // ── Confirmed trip → navigation dashboard ──────────────────────────────────
   const totalPassengers = activeTrip.passengers.length;
   const totalStops      = routeStops.length || totalPassengers;
 
-  const stopsDisplay      = isStarted
-    ? `${driverStatus.passedStops} / ${driverStatus.totalStops}`
-    : `0 / ${totalStops}`;
-  const onBoardDisplay    = isStarted
-    ? `${driverStatus.passedPassengers} / ${driverStatus.totalPassengers}`
-    : `0 / ${totalPassengers}`;
-  const routeProgress     = isStarted ? driverStatus.progress : 0;
-  const nextStop          = isStarted && driverStatus.nextStopName
-    ? driverStatus.nextStopName
-    : "42 Irbid Campus";
+  const stopsDisplay   = isStarted ? `${driverStatus.passedStops} / ${driverStatus.totalStops}` : `0 / ${totalStops}`;
+  const onBoardDisplay = isStarted ? `${driverStatus.passedPassengers} / ${driverStatus.totalPassengers}` : `0 / ${totalPassengers}`;
+  const routeProgress  = isStarted ? driverStatus.progress : 0;
+  const nextStop       = isStarted && driverStatus.nextStopName ? driverStatus.nextStopName : "42 Irbid Campus";
 
   return (
     <div className="flex flex-col gap-3">
-
-      {/* ── Stats Panel ───────────────────────────────────────────────────── */}
+      {/* ── Stats Panel ── */}
       <div className="bg-[#090d14] border border-white/[0.08] rounded-2xl p-4 space-y-3">
-
-        {/* Header row */}
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2.5">
-            <span
-              className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                isStarted
-                  ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse"
-                  : "bg-yellow-400"
-              }`}
-            />
+            <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isStarted ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse" : "bg-yellow-400"}`} />
             <span className="text-sm font-bold tracking-widest text-white uppercase">
               {isStarted ? "Trip Active" : "Ready to Navigate"}
             </span>
@@ -205,10 +212,8 @@ function DriverMapView() {
 
           {!isStarted && (
             <button
-              onClick={() => setIsStarted(true)}
-              className="flex items-center gap-2 px-4 py-1.5 rounded-xl text-sm font-semibold
-                         bg-emerald-500/15 border border-emerald-500/30 text-emerald-400
-                         hover:bg-emerald-500/25 transition-colors"
+              onClick={handleStartNavigation}
+              className="flex items-center gap-2 px-4 py-1.5 rounded-xl text-sm font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 transition-colors"
             >
               <Play size={13} className="fill-emerald-400" />
               Start Navigation
@@ -216,52 +221,31 @@ function DriverMapView() {
           )}
         </div>
 
-        {/* Next Stop */}
         <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#a7b0c0] mb-1">
-            Next Stop
-          </p>
-          <p className="text-xl font-bold text-white truncate leading-tight">
-            {nextStop}
-          </p>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#a7b0c0] mb-1">Next Stop</p>
+          <p className="text-xl font-bold text-white truncate leading-tight">{nextStop}</p>
         </div>
 
-        {/* Metric cards */}
         <div className="grid grid-cols-3 gap-2">
-
-          {/* Stops Done */}
           <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#a7b0c0] mb-1">
-              Stops Done
-            </p>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#a7b0c0] mb-1">Stops Done</p>
             <p className="text-xl font-bold text-[#22d3ee] leading-tight">{stopsDisplay}</p>
           </div>
-
-          {/* On Board */}
           <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#a7b0c0] mb-1">
-              On Board
-            </p>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#a7b0c0] mb-1">On Board</p>
             <p className="text-xl font-bold text-[#ff2e88] leading-tight">{onBoardDisplay}</p>
           </div>
-
-          {/* Route % */}
           <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#a7b0c0] mb-1">
-              Route
-            </p>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#a7b0c0] mb-1">Route</p>
             <p className="text-xl font-bold text-emerald-400 leading-tight">{routeProgress}%</p>
             <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden mt-1.5">
-              <div
-                className="h-full bg-gradient-to-r from-emerald-500 to-[#22d3ee] rounded-full transition-all duration-500"
-                style={{ width: `${routeProgress}%` }}
-              />
+              <div className="h-full bg-gradient-to-r from-emerald-500 to-[#22d3ee] rounded-full transition-all duration-500" style={{ width: `${routeProgress}%` }} />
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── Map ───────────────────────────────────────────────────────────── */}
+      {/* ── Map ── */}
       <div className="rounded-2xl overflow-hidden border border-white/[0.08] shadow-2xl">
         <RouteMap
           height="calc(100vh - 360px)"
@@ -274,7 +258,6 @@ function DriverMapView() {
         />
       </div>
 
-      {/* Legend hint */}
       <p className="text-xs text-[#a7b0c0] px-1">
         {isStarted
           ? <><span className="text-[#22c55e] font-medium">● Green trace</span> = path travelled · orange markers update as stops are reached</>
@@ -285,15 +268,127 @@ function DriverMapView() {
   );
 }
 
-// ─── MapPage (entry point) ─────────────────────────────────────────────────────
-export default function MapPage() {
-  const { user } = useAuth();
-  const [, setLocation] = useLocation();
+// ─── StudentLiveView — read-only live tracking when trip is in_progress ────────
+function StudentLiveView({ trip }: { trip: NonNullable<ActiveTripResponse["trip"]> }) {
+  const { data: pickupPoints = [] } = useQuery<PickupPoint[]>({
+    queryKey: ["student-live-pickup-points"],
+    queryFn: () => customFetch<PickupPoint[]>("/api/pickup-points"),
+  });
 
+  const [liveStatus, setLiveStatus] = useState({
+    nextStopName: "42 Irbid Campus",
+    passedStops: 0,
+    totalStops: 0,
+    passedPassengers: 0,
+    totalPassengers: 0,
+    progress: 0,
+  });
+
+  const routeStops: CustomBooking[] = trip.passengers
+    .map(p => fixedPickupToRouteStop(p, pickupPoints))
+    .filter((s): s is CustomBooking => s !== null);
+
+  const handleProgress = useCallback((info: DriverProgressInfo) => {
+    setLiveStatus({
+      nextStopName: info.nextStopName,
+      passedStops: info.passedStops,
+      totalStops: info.totalStops,
+      passedPassengers: info.passedPassengers,
+      totalPassengers: info.totalPassengers,
+      progress: info.totalPts > 0 ? Math.round((info.busIdx / info.totalPts) * 100) : 0,
+    });
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-3">
+      {/* Live indicator header */}
+      <div className="bg-[#090d14] border border-[#22d3ee]/20 rounded-2xl p-4 space-y-3">
+        {/* Status row */}
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2.5">
+            <Radio size={15} className="text-[#22d3ee] animate-pulse" />
+            <span className="text-sm font-bold tracking-widest text-white uppercase">Live Tracking</span>
+            <span className="ml-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-[#22d3ee]/15 border border-[#22d3ee]/30 text-[#22d3ee] uppercase tracking-wider">
+              In Progress
+            </span>
+          </div>
+          <span className="text-xs text-[#a7b0c0]">
+            {trip.direction === "to_campus" ? "→ 42 Irbid" : "← From Campus"} · {trip.departureTime}
+          </span>
+        </div>
+
+        {/* Next stop */}
+        <div className="bg-[#22d3ee]/[0.07] border border-[#22d3ee]/20 rounded-xl px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#a7b0c0] mb-1">Next Stop</p>
+          <p className="text-xl font-bold text-white truncate leading-tight">{liveStatus.nextStopName}</p>
+        </div>
+
+        {/* Metric cards */}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#a7b0c0] mb-1">Stops Done</p>
+            <p className="text-xl font-bold text-[#22d3ee] leading-tight">
+              {liveStatus.passedStops}<span className="text-xs font-normal text-[#a7b0c0]">/{liveStatus.totalStops}</span>
+            </p>
+          </div>
+          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#a7b0c0] mb-1">On Board</p>
+            <p className="text-xl font-bold text-[#ff2e88] leading-tight">
+              {liveStatus.passedPassengers}<span className="text-xs font-normal text-[#a7b0c0]">/{liveStatus.totalPassengers}</span>
+            </p>
+          </div>
+          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#a7b0c0] mb-1">Route</p>
+            <p className="text-xl font-bold text-emerald-400 leading-tight">{liveStatus.progress}%</p>
+            <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden mt-1.5">
+              <div
+                className="h-full bg-gradient-to-r from-[#22d3ee] to-emerald-400 rounded-full transition-all duration-500"
+                style={{ width: `${liveStatus.progress}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Read-only notice */}
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06]">
+          <CheckCircle2 size={13} className="text-[#22d3ee] shrink-0" />
+          <p className="text-[11px] text-[#a7b0c0]">
+            <span className="text-white font-medium">View-only.</span> Your driver has started the trip. Tracking updates in real time.
+          </p>
+        </div>
+      </div>
+
+      {/* Map — read-only driver view */}
+      <div className="rounded-2xl overflow-hidden border border-[#22d3ee]/20 shadow-2xl">
+        <RouteMap
+          height="calc(100vh - 420px)"
+          showBus={false}
+          customBookings={routeStops}
+          userRole="driver"
+          isTripActive={true}
+          animateRoute={true}
+          onDriverProgress={handleProgress}
+        />
+      </div>
+
+      <p className="text-xs text-[#a7b0c0] px-1">
+        <span className="text-[#22c55e] font-medium">● Green trace</span> = path travelled · bus icon shows current position
+      </p>
+    </div>
+  );
+}
+
+// ─── StudentMapView — standard dark map or live tracking ──────────────────────
+function StudentMapView() {
   const [busData, setBusData] = useState({ idx: 0, total: 0, stopIndices: [0, 0, 0, 0] });
   const [customPickup, setCustomPickup] = useState<[number, number] | null>(null);
 
-  useEffect(() => { if (!user) setLocation("/"); }, [user, setLocation]);
+  const { data: activeTripData, isLoading: loadingActive } = useQuery<ActiveTripResponse>({
+    queryKey: ["student-active-trip"],
+    queryFn: () => customFetch<ActiveTripResponse>("/api/student/active-trip"),
+    refetchInterval: 15_000,
+    staleTime: 10_000,
+  });
 
   const handleBusMoved = useCallback((idx: number, total: number, stopIndices: number[]) => {
     setBusData({ idx, total, stopIndices });
@@ -303,12 +398,38 @@ export default function MapPage() {
     setCustomPickup(coords);
   }, []);
 
-  if (!user) return null;
+  if (loadingActive) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3">
+        <Loader2 size={24} className="text-[#22d3ee] animate-spin" />
+        <p className="text-[#a7b0c0] text-sm">Checking trip status…</p>
+      </div>
+    );
+  }
 
-  // ── Driver: delegate to DriverMapView ──────────────────────────────────────
-  if (user.role === "driver") return <DriverMapView />;
+  // ── Active trip: switch to live tracking mode ──
+  if (activeTripData?.status === "in_progress" && activeTripData.trip) {
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-white">Live Route Map</h1>
+            <p className="text-[#a7b0c0] text-sm mt-0.5 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#22d3ee] inline-block animate-pulse" />
+              Irbid, Jordan · Trip in progress
+            </p>
+          </div>
+          <div className="sm:ml-auto flex items-center gap-2 px-3 py-1.5 bg-[#22d3ee]/10 border border-[#22d3ee]/20 rounded-lg">
+            <Radio size={13} className="text-[#22d3ee] animate-pulse" />
+            <span className="text-xs text-[#22d3ee] font-medium">Live</span>
+          </div>
+        </div>
+        <StudentLiveView trip={activeTripData.trip} />
+      </div>
+    );
+  }
 
-  // ── Student: unchanged existing view ──────────────────────────────────────
+  // ── No active trip: standard dark map ──────────────────────────────────────
   const { idx, total, stopIndices } = busData;
   const busProgress = total > 0 ? Math.round((idx / total) * 100) : 0;
 
@@ -321,7 +442,6 @@ export default function MapPage() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Live Route Map</h1>
@@ -453,4 +573,18 @@ export default function MapPage() {
       </div>
     </div>
   );
+}
+
+// ─── MapPage (entry point) ─────────────────────────────────────────────────────
+export default function MapPage() {
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => { if (!user) setLocation("/"); }, [user, setLocation]);
+
+  if (!user) return null;
+
+  if (user.role === "driver") return <DriverMapView />;
+
+  return <StudentMapView />;
 }

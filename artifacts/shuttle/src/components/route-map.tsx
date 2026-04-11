@@ -860,7 +860,7 @@ export function RouteMap({
   const popupCss = isDriver ? POPUP_CSS_LIGHT : POPUP_CSS_DARK;
 
   return (
-    <div className="relative w-full" style={{ height }}>
+    <div className="relative w-full" style={{ height, isolation: "isolate" }}>
       <style>{popupCss}</style>
 
       {loading && (
