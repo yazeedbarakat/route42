@@ -2,10 +2,17 @@ import jwt from "jsonwebtoken";
 import type { Request, Response, NextFunction } from "express";
 
 const JWT_SECRET = process.env.SESSION_SECRET ?? "shuttle-secret-42irbid";
+// Separate secret for short-lived profile-completion tokens
+const TEMP_SECRET = (process.env.SESSION_SECRET ?? "shuttle-secret-42irbid") + "-temp";
 
 export interface JwtPayload {
   userId: number;
   role: string;
+  email: string;
+}
+
+export interface TempPayload {
+  userId: number;
   email: string;
 }
 
@@ -15,6 +22,15 @@ export function signToken(payload: JwtPayload): string {
 
 export function verifyToken(token: string): JwtPayload {
   return jwt.verify(token, JWT_SECRET) as JwtPayload;
+}
+
+/** Short-lived token used during the Google OAuth profile-completion step. */
+export function signTempToken(payload: TempPayload): string {
+  return jwt.sign(payload, TEMP_SECRET, { expiresIn: "30m" });
+}
+
+export function verifyTempToken(token: string): TempPayload {
+  return jwt.verify(token, TEMP_SECRET) as TempPayload;
 }
 
 declare global {

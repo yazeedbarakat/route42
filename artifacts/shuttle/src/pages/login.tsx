@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useLogin, useRegister, useDriverLogin } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
@@ -13,27 +13,67 @@ const STUDENT_EMAIL_DOMAIN = "@learner.42.tech";
 // Three distinct UI modes on this page
 type PageMode = "login" | "register" | "driver";
 
+// Google SVG icon
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M17.64 9.2045c0-.638-.0573-1.2518-.1636-1.8409H9v3.4814h4.8436c-.2086 1.125-.8427 2.0782-1.7959 2.7164v2.2581h2.9087c1.7018-1.5668 2.6836-3.874 2.6836-6.615z" fill="#4285F4"/>
+      <path d="M9 18c2.43 0 4.4673-.806 5.9564-2.1805l-2.9087-2.2581c-.8059.54-1.8368.859-3.0477.859-2.3441 0-4.3286-1.5836-5.036-3.7104H.9574v2.3318C2.4382 15.9832 5.4818 18 9 18z" fill="#34A853"/>
+      <path d="M3.964 10.71c-.18-.54-.2827-1.1168-.2827-1.71s.1027-1.17.2827-1.71V4.9582H.9574C.3477 6.173 0 7.5482 0 9s.3477 2.827.9574 4.0418L3.964 10.71z" fill="#FBBC05"/>
+      <path d="M9 3.5795c1.3214 0 2.5077.4541 3.4405 1.346l2.5813-2.5813C13.4627.8918 11.4255 0 9 0 5.4818 0 2.4382 2.0168.9574 4.9582L3.964 7.29C4.6714 5.1632 6.6559 3.5795 9 3.5795z" fill="#EA4335"/>
+    </svg>
+  );
+}
+
 export default function Login() {
   const { user, setToken } = useAuth();
   const [, setLocation] = useLocation();
+  const search = useSearch();
   const { toast } = useToast();
 
   const [mode, setMode] = useState<PageMode>("login");
 
   // Standard login / register fields
-  const [email, setEmail]       = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName]         = useState("");
-  const [phone, setPhone]       = useState("");
-  const [role, setRole]         = useState<UserRole>("student");
+  const [identifier, setIdentifier] = useState(""); // email or username for login
+  const [email, setEmail]           = useState("");  // used for registration
+  const [password, setPassword]     = useState("");
+  const [name, setName]             = useState("");
+  const [phone, setPhone]           = useState("");
+  const [role, setRole]             = useState<UserRole>("student");
   const [emailError, setEmailError] = useState<string | null>(null);
 
   // Driver ID login field
   const [driverId, setDriverId] = useState("");
 
-  const loginMutation      = useLogin();
-  const registerMutation   = useRegister();
+  const loginMutation       = useLogin();
+  const registerMutation    = useRegister();
   const driverLoginMutation = useDriverLogin();
+
+  // Handle OAuth redirect params (?token=xxx or ?error=xxx)
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const oauthToken = params.get("token");
+    const oauthError = params.get("error");
+
+    if (oauthToken) {
+      setToken(oauthToken);
+      toast({ title: "Welcome!", description: "Signed in with Google." });
+      // Clean the URL
+      window.history.replaceState({}, "", window.location.pathname);
+      return;
+    }
+
+    if (oauthError) {
+      let description = "Authentication failed. Please try again.";
+      if (oauthError === "unauthorized_domain") {
+        description = "Unauthorized Domain. Please use your 42 email (@learner.42.tech).";
+      } else if (oauthError === "oauth_failed") {
+        description = "Google sign-in failed. Please try again.";
+      }
+      toast({ title: "Sign-in failed", description, variant: "destructive" });
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, [search]);
 
   // Redirect once authenticated
   useEffect(() => {
@@ -48,7 +88,7 @@ export default function Login() {
   const switchMode = (next: PageMode) => {
     setMode(next);
     setEmailError(null);
-    setEmail(""); setPassword(""); setName(""); setPhone(""); setDriverId("");
+    setIdentifier(""); setEmail(""); setPassword(""); setName(""); setPhone(""); setDriverId("");
   };
 
   // Validate @learner.42.tech domain for student registration
@@ -73,6 +113,10 @@ export default function Login() {
     if (mode === "register") validateEmail(email, newRole);
   };
 
+  const handleGoogleSignIn = () => {
+    window.location.href = "/api/auth/google";
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -92,8 +136,8 @@ export default function Login() {
         toast({ title: "Welcome!", description: "Account created successfully." });
 
       } else {
-        // Standard email/password login
-        const res = await loginMutation.mutateAsync({ data: { email, password } });
+        // Unified login — sends identifier in the "email" field (backend accepts email or username)
+        const res = await loginMutation.mutateAsync({ data: { email: identifier, password } });
         setToken(res.token);
         toast({ title: "Welcome back!", description: "Signed in successfully." });
       }
@@ -109,6 +153,7 @@ export default function Login() {
 
   const isDriver   = mode === "driver";
   const isRegister = mode === "register";
+  const isStudent  = role === "student";
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
@@ -142,6 +187,26 @@ export default function Login() {
               : "Enter your credentials to access your dashboard"}
           </p>
 
+          {/* ── Google sign-in (students only, login & register) ── */}
+          {!isDriver && (isStudent || isRegister) && (
+            <div className="mb-4">
+              <button
+                type="button"
+                onClick={handleGoogleSignIn}
+                className="w-full flex items-center justify-center gap-3 bg-white/[0.07] hover:bg-white/[0.12] border border-white/[0.12] text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 text-sm"
+              >
+                <GoogleIcon />
+                {isRegister ? "Continue with Google" : "Login with Google"}
+              </button>
+
+              <div className="flex items-center gap-3 my-4">
+                <div className="flex-1 h-px bg-white/[0.08]" />
+                <span className="text-[11px] text-[#a7b0c0]/60 uppercase tracking-wider">or</span>
+                <div className="flex-1 h-px bg-white/[0.08]" />
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* ── Driver ID login ── */}
             {isDriver && (
@@ -165,7 +230,7 @@ export default function Login() {
               </div>
             )}
 
-            {/* ── Standard email/password fields ── */}
+            {/* ── Standard fields ── */}
             {!isDriver && (
               <>
                 {isRegister && (
@@ -185,32 +250,54 @@ export default function Login() {
                   </div>
                 )}
 
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-[#a7b0c0]">Email</label>
-                  <div className="relative">
-                    <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a7b0c0]" />
-                    <input
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => handleEmailChange(e.target.value)}
-                      className={`w-full bg-white/[0.05] border rounded-lg pl-9 pr-4 py-2.5 text-white placeholder-[#a7b0c0]/50 text-sm focus:outline-none focus:bg-white/[0.08] transition-all ${
-                        emailError
-                          ? "border-red-500/60 focus:border-red-500/80"
-                          : "border-white/[0.08] focus:border-[#ff2e88]/60"
-                      }`}
-                      placeholder={isRegister && role === "student" ? "you@learner.42.tech" : "you@42irbid.edu"}
-                    />
+                {/* Login: Email or Username field */}
+                {!isRegister && (
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-[#a7b0c0]">Email or Username</label>
+                    <div className="relative">
+                      <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a7b0c0]" />
+                      <input
+                        type="text"
+                        required
+                        autoComplete="username"
+                        value={identifier}
+                        onChange={(e) => setIdentifier(e.target.value)}
+                        className="w-full bg-white/[0.05] border border-white/[0.08] rounded-lg pl-9 pr-4 py-2.5 text-white placeholder-[#a7b0c0]/50 text-sm focus:outline-none focus:border-[#ff2e88]/60 focus:bg-white/[0.08] transition-all"
+                        placeholder="Email or Username"
+                      />
+                    </div>
                   </div>
-                  {emailError && (
-                    <p className="text-xs text-red-400 mt-1">{emailError}</p>
-                  )}
-                  {isRegister && role === "student" && !emailError && (
-                    <p className="text-[11px] text-[#a7b0c0]/70 mt-1">
-                      Only @learner.42.tech addresses are accepted.
-                    </p>
-                  )}
-                </div>
+                )}
+
+                {/* Register: Email field */}
+                {isRegister && (
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-[#a7b0c0]">Email</label>
+                    <div className="relative">
+                      <Mail size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#a7b0c0]" />
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => handleEmailChange(e.target.value)}
+                        className={`w-full bg-white/[0.05] border rounded-lg pl-9 pr-4 py-2.5 text-white placeholder-[#a7b0c0]/50 text-sm focus:outline-none focus:bg-white/[0.08] transition-all ${
+                          emailError
+                            ? "border-red-500/60 focus:border-red-500/80"
+                            : "border-white/[0.08] focus:border-[#ff2e88]/60"
+                        }`}
+                        placeholder={role === "student" ? "you@learner.42.tech" : "you@42irbid.edu"}
+                      />
+                    </div>
+                    {emailError && (
+                      <p className="text-xs text-red-400 mt-1">{emailError}</p>
+                    )}
+                    {role === "student" && !emailError && (
+                      <p className="text-[11px] text-[#a7b0c0]/70 mt-1">
+                        Only @learner.42.tech addresses are accepted.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-[#a7b0c0]">Password</label>
@@ -312,15 +399,15 @@ export default function Login() {
           <div className="space-y-1 font-mono text-xs">
             <div className="flex justify-between">
               <span className="text-[#ff2e88]">Admin</span>
-              <span className="text-white/50">admin@42irbid.com / admin123</span>
+              <span className="text-white/50">admin / admin123</span>
             </div>
             <div className="flex justify-between">
               <span className="text-emerald-400">Driver</span>
-              <span className="text-white/50">DRV-001 or driver@42irbid.com / driver123</span>
+              <span className="text-white/50">DRV-001</span>
             </div>
             <div className="flex justify-between">
               <span className="text-[#22d3ee]">Student</span>
-              <span className="text-white/50">ali@learner.42.tech / student123</span>
+              <span className="text-white/50">s1 / s1 &nbsp;(run /api/dev/seed-students first)</span>
             </div>
           </div>
         </div>

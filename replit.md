@@ -26,9 +26,10 @@ Terminal dark aesthetic: deep black background (#0a0a0a), terminal green (#00FF0
 
 ## Demo Credentials
 
-- **Admin**: admin@42irbid.com / admin123
-- **Driver**: Driver ID `DRV-001` or driver@42irbid.com / driver123
+- **Admin**: username `admin` / password `admin123` (or email admin@42irbid.com)
+- **Driver**: Driver ID `DRV-001`
 - **Student**: ali@learner.42.tech / student123
+- **Mock students**: s1/s1 through s6/s6 — seed via `GET /api/dev/seed-students`
 
 ## Pickup Points
 
@@ -47,6 +48,15 @@ Terminal dark aesthetic: deep black background (#0a0a0a), terminal green (#00FF0
 ## Auth
 
 JWT stored in `localStorage` as `shuttle_token`. Token passed via `setAuthTokenGetter` from api-client-react. Roles: student / admin / driver.
+
+### Auth Flows
+- **Student login**: Google OAuth (domain restricted to `@learner.42.tech`) OR email/username + password. Login form accepts email or username in one text field.
+- **Student Google OAuth**: `GET /api/auth/google` → Google → callback at `/api/auth/google/callback` → domain check → if new user, redirect to `/complete-profile?token=<temp_jwt>` for profile setup (name, phone, password) → final JWT issued.
+- **Admin login**: Standard form, supports username `admin` or email `admin@42irbid.com`.
+- **Driver login**: Driver ID only — untouched.
+- **DB columns added**: `username` (unique), `google_id` (unique), `profile_complete` (bool, default true).
+- **Google OAuth secrets required**: `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in Replit Secrets.
+- **Mock student seed**: `GET /api/dev/seed-students` — creates s1–s6 with bcrypt-hashed passwords.
 
 ## Auto-Confirm Logic
 

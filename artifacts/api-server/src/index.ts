@@ -34,8 +34,9 @@ app.listen(port, async (err) => {
         email: "admin@42irbid.com",
         password: "admin123",
         role: "admin",
-        phone: null,
-        driverId: null,
+        phone: null as string | null,
+        driverId: null as string | null,
+        username: "admin",
       },
       {
         name: "Demo Driver",
@@ -44,14 +45,16 @@ app.listen(port, async (err) => {
         role: "driver",
         phone: "+962 7 0000 0001",
         driverId: "DRV-001",
+        username: null as string | null,
       },
       {
         name: "Ali Student",
         email: "ali@learner.42.tech",
         password: "student123",
         role: "student",
-        phone: null,
-        driverId: null,
+        phone: null as string | null,
+        driverId: null as string | null,
+        username: null as string | null,
       },
     ];
 
@@ -82,24 +85,27 @@ app.listen(port, async (err) => {
         await db
           .update(usersTable)
           .set({
-            name: demo.name,
-            email: demo.email,
+            name:     demo.name,
+            email:    demo.email,
             passwordHash,
-            role: demo.role,
-            phone: demo.phone,
+            role:     demo.role,
+            phone:    demo.phone,
             driverId: demo.driverId,
+            username: demo.username,
           })
           .where(eq(usersTable.id, existing.id));
       } else {
         await db
           .insert(usersTable)
           .values({
-            name: demo.name,
-            email: demo.email,
+            name:            demo.name,
+            email:           demo.email,
             passwordHash,
-            role: demo.role,
-            phone: demo.phone,
-            driverId: demo.driverId,
+            role:            demo.role,
+            phone:           demo.phone,
+            driverId:        demo.driverId,
+            username:        demo.username,
+            profileComplete: true,
           });
       }
     }

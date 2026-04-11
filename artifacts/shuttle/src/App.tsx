@@ -7,6 +7,7 @@ import { Layout } from "@/components/layout";
 import NotFound from "@/pages/not-found";
 
 import Login from "@/pages/login";
+import CompleteProfile from "@/pages/complete-profile";
 import Dashboard from "@/pages/dashboard";
 import Book from "@/pages/book";
 import History from "@/pages/history";
@@ -26,6 +27,7 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/" component={Login} />
+        <Route path="/complete-profile" component={CompleteProfile} />
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/book" component={Book} />
         <Route path="/history" component={History} />
