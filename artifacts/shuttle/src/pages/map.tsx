@@ -358,7 +358,7 @@ function StudentLiveView({ trip }: { trip: NonNullable<ActiveTripResponse["trip"
         </div>
       </div>
 
-      {/* Map — read-only driver view */}
+      {/* Map — read-only live tracking: light theme, no click events, no pickup pin */}
       <div className="rounded-2xl overflow-hidden border border-[#22d3ee]/20 shadow-2xl">
         <RouteMap
           height="calc(100vh - 420px)"
@@ -368,6 +368,8 @@ function StudentLiveView({ trip }: { trip: NonNullable<ActiveTripResponse["trip"
           isTripActive={true}
           animateRoute={true}
           onDriverProgress={handleProgress}
+          isReadOnly={true}
+          forceLightTheme={true}
         />
       </div>
 

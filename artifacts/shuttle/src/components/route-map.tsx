@@ -66,6 +66,18 @@ export interface RouteMapProps {
   animateRoute?: boolean;
   /** Fires as the animated bus progresses — use to update status panel outside the map */
   onDriverProgress?: (info: DriverProgressInfo) => void;
+  /**
+   * When true: disables all map click events, suppresses the PickupMarker, and
+   * prevents custom pickup drops. Use for read-only spectator views (e.g. student live tracking).
+   * Does NOT affect the booking map in book.tsx — that map never passes this prop.
+   */
+  isReadOnly?: boolean;
+  /**
+   * When true: always renders the light CartoDB tile layer regardless of userRole.
+   * Lets a non-driver view (e.g. student live tracking) match the driver's map clarity
+   * without having to set userRole="driver".
+   */
+  forceLightTheme?: boolean;
 }
 
 // ─── Terminals & Route ────────────────────────────────────────────────────────
@@ -712,8 +724,11 @@ export function RouteMap({
   isTripActive = false,
   animateRoute = false,
   onDriverProgress,
+  isReadOnly = false,
+  forceLightTheme = false,
 }: RouteMapProps) {
   const isDriver = userRole === "driver";
+  const useLight = isDriver || forceLightTheme;
   const { data: pickupPoints = [] } = useGetPickupPoints({
     query: {
       staleTime: 30_000,
@@ -853,11 +868,11 @@ export function RouteMap({
     setToast({ type: "invalid", text: "Invalid location. You can only request pickups directly on the bus route." });
   }, []);
 
-  const tileUrl = isDriver
+  const tileUrl = useLight
     ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
     : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 
-  const popupCss = isDriver ? POPUP_CSS_LIGHT : POPUP_CSS_DARK;
+  const popupCss = useLight ? POPUP_CSS_LIGHT : POPUP_CSS_DARK;
 
   return (
     <div className="relative w-full" style={{ height, isolation: "isolate" }}>
@@ -977,10 +992,11 @@ export function RouteMap({
           <AdminAnalyticsLayer hotspots={analyticsHotspots} />
         )}
 
-        <PickupMarker position={effectivePickup ?? null} />
+        {/* Pickup pin — hidden in read-only mode (e.g. student live tracking) */}
+        {!isReadOnly && <PickupMarker position={effectivePickup ?? null} />}
 
-        {/* Click handler — disabled for drivers */}
-        {!isDriver && routePoints.length > 0 && (
+        {/* Click handler — disabled for drivers and for any read-only view */}
+        {!isDriver && !isReadOnly && routePoints.length > 0 && (
           <ClickHandler routePoints={routePoints} onValid={handleValidClick} onInvalid={handleInvalidClick} />
         )}
       </MapContainer>
