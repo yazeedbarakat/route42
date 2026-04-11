@@ -1,0 +1,36 @@
+Act as an expert Full-Stack Developer. I need to transform the "Custom Pickup Map" in the Admin Dashboard of my "Smart Shuttle Solution" from a static UI into a real Data Analytics & History tool.
+
+**Goal:**
+Build a secure admin-only analytics map that shows historical usage of custom pickup points based on real booking data, clustering nearby points together.
+
+**Task 1: Remove Mock Data & Fetch Real Aggregated Data**
+* Locate the Admin component that renders the "Custom Pickup Map".
+* Remove all hardcoded or mock student data arrays.
+* Replace them with a real data fetch using SWR, React Query, or standard fetch.
+* Use a backend endpoint such as: `GET /api/admin/custom-pickups-history`.
+
+**Task 2: Backend Aggregation Logic (50-Meter Radius Clustering)**
+* Create or update the backend controller for this endpoint.
+* Query the database for all current and historical bookings where `pickupType === 'custom'`.
+* **Clustering Logic:** Instead of simple rounding, group bookings based on geographic proximity. Implement a distance-based clustering algorithm (e.g., using the Haversine formula in JS, or spatial DB functions like PostGIS `ST_DWithin`). 
+* Group any coordinates that fall within a **50-meter radius** of each other into a single aggregated "hotspot".
+* For each aggregated hotspot, return:
+  1. `coordinates`: { lat, lng } (The central or averaged coordinate of the cluster)
+  2. `totalUsage`: total number of bookings within this 50m area
+  3. `studentsHistory`: array of `{ name, date }` objects for students who booked within this cluster.
+
+**Task 3: Interactive Map UI**
+* Render the aggregated hotspot points on the Admin Custom Pickup Map using Leaflet markers.
+* Make each marker clickable to open a standard Leaflet `<Popup>`.
+* **Popup UI Requirements:** Use the existing dark theme styling from "42 Intranet V2" and display:
+  - Title: "Custom Point Analytics"
+  - A highlighted stat: "Total Pickups: [totalUsage]"
+  - A small scrollable list showing `studentsHistory` with names and dates.
+* **Optional Enhancement:** Make the marker size or opacity scale slightly based on `totalUsage` to simulate a heatmap effect.
+
+**Security Requirements:**
+* This feature must be accessible only to users with `role === 'admin'`.
+* Enforce the role check in both the frontend and backend.
+* Non-admin users must not be able to access the endpoint or see the map feature.
+
+Please provide the Backend controller (including the 50-meter clustering logic) and the Frontend React component for the Admin Map.
