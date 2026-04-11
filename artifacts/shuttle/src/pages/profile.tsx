@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -39,17 +39,19 @@ export default function Profile() {
   const [name, setName] = useState(user?.name ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
   const [preview, setPreview] = useState<string | null>(user?.profilePicture ?? null);
-  const [pendingPicture, setPendingPicture] = useState<string | null | "remove">(undefined as unknown as null);
+  const [avatarChanged, setAvatarChanged] = useState(false);
+  const [pendingPicture, setPendingPicture] = useState<string | null | "remove">(null);
 
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sizeError, setSizeError] = useState<string | null>(null);
 
-  if (!user) {
-    setLocation("/");
-    return null;
-  }
+  useEffect(() => {
+    if (!user) setLocation("/");
+  }, [user, setLocation]);
+
+  if (!user) return null;
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -67,6 +69,7 @@ export default function Profile() {
       const dataUrl = ev.target?.result as string;
       setPreview(dataUrl);
       setPendingPicture(dataUrl);
+      setAvatarChanged(true);
     };
     reader.readAsDataURL(file);
   }, []);
@@ -74,6 +77,7 @@ export default function Profile() {
   const handleRemoveAvatar = () => {
     setPreview(null);
     setPendingPicture("remove");
+    setAvatarChanged(true);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -89,10 +93,12 @@ export default function Profile() {
       if (name.trim() !== user.name) body.name = name.trim();
       if ((phone.trim() || null) !== (user.phone ?? null)) body.phone = phone.trim() || null;
 
-      if (pendingPicture === "remove") {
-        body.profilePicture = null;
-      } else if (pendingPicture && pendingPicture !== user.profilePicture) {
-        body.profilePicture = pendingPicture;
+      if (avatarChanged) {
+        if (pendingPicture === "remove") {
+          body.profilePicture = null;
+        } else if (typeof pendingPicture === "string") {
+          body.profilePicture = pendingPicture;
+        }
       }
 
       if (Object.keys(body).length === 0) {
@@ -118,7 +124,8 @@ export default function Profile() {
 
       // Invalidate /auth/me so all components using user data refresh instantly
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      setPendingPicture(undefined as unknown as null);
+      setPendingPicture(null);
+      setAvatarChanged(false);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
@@ -131,7 +138,7 @@ export default function Profile() {
   const hasChanges =
     name.trim() !== user.name ||
     (phone.trim() || null) !== (user.phone ?? null) ||
-    pendingPicture !== undefined;
+    avatarChanged;
 
   return (
     <div className="max-w-lg mx-auto space-y-6">

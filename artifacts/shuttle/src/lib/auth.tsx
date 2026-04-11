@@ -61,13 +61,18 @@ function AuthProviderInner({ children, token, setToken }: { children: ReactNode;
   }, [error]);
 
   const logout = () => {
-    // Clear all cached query data so stale user data doesn't persist
-    // after the token is removed — fixes the sign-out redirect loop.
-    queryClient.clear();
-    // Clear app-local session storage in addition to the JWT token.
+    // 1. Null the token getter immediately — all subsequent fetch calls send
+    //    no Authorization header even before the React state update fires.
+    setAuthTokenGetter(null);
     localStorage.removeItem("shuttle_token");
     sessionStorage.clear();
+    // 2. Update React state so every query with `enabled: !!token` disables.
     setToken(null);
+    // 3. Remove only the /auth/me entry so Login's redirect guard sees no user.
+    //    We intentionally do NOT call queryClient.clear() here: that would
+    //    notify observers to re-schedule fetches while the token state update
+    //    hasn't propagated yet, causing a flood of unauthenticated requests.
+    queryClient.removeQueries({ queryKey: ["/api/auth/me"] });
   };
 
   const userData = user ? {
