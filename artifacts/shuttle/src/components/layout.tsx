@@ -7,6 +7,7 @@ import {
   ChevronRight, Menu, X, UsersRound, MapPin, CalendarClock, UserCog
 } from "lucide-react";
 import { useState } from "react";
+import { LoadingScreen } from "@/components/loading-screen";
 
 const NAV_LINKS = {
   student: [
@@ -30,7 +31,7 @@ const NAV_LINKS = {
 };
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading } = useAuth();
   const [location, setLocation] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -44,6 +45,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     setLocation("/");
   };
 
+  if (isLoading) return <LoadingScreen />;
   if (!user) return <>{children}</>;
 
   const links = NAV_LINKS[user.role as keyof typeof NAV_LINKS] || [];

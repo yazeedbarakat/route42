@@ -1,0 +1,26 @@
+Act as an expert React/Next.js Full-Stack Developer. I need to fix a critical Authentication Persistence issue in my "Smart Shuttle Solution" project.
+
+**The Problem:**
+Whenever an authenticated user refreshes the page (F5), they are instantly redirected back to the `/login` page because the application loses the auth state for a split second during the initial render.
+
+**The Solution:** Implement a proper "Auth Loading State" to delay the redirect until the session or token is fully verified.
+
+Please review my authentication setup and apply the correct fix based on my stack:
+
+**Scenario A: If using NextAuth.js (`next-auth/react`)**
+1. **App Wrapper:** Ensure the entire application is wrapped in `<SessionProvider>` inside `_app.js` or `layout.js`.
+2. **Protected Routes:** In components or middleware protecting the routes, check the `status` from `useSession()`. 
+3. **The Fix:** If `status === "loading"`, return a global loading screen/spinner. DO NOT redirect to `/login` unless `status === "unauthenticated"`.
+
+**Scenario B: If using Custom Auth (React Context + localStorage/JWT)**
+1. **Auth Context Update:** Update the `AuthContext` state to include `isLoading` (default: `true`).
+2. **Hydration Check:** In the Context provider, use a `useEffect` to check `localStorage` (or cookies) for the user token on the initial mount. 
+3. **State Resolution:** Once the token is found and verified, set the `user` state and change `isLoading` to `false`. If no token is found, set `user` to `null` and `isLoading` to `false`.
+4. **The Fix:** In your `ProtectedRoute` wrapper component, if `isLoading` is `true`, return a full-screen Loading component. Only redirect (`Maps` or `router.push`) if `!isLoading && !user`.
+
+**Task 3: Global Loading UI**
+* Create a sleek, full-screen `LoadingScreen` component to display while the auth state resolves.
+* Style it matching the "42 Intranet V2" dark theme (e.g., `#0f172a` background with a subtle cyan or pink glowing spinner).
+
+**Deliverables:**
+Provide the updated Auth Provider/Context logic, the Protected Route wrapper fix, and the new `LoadingScreen` component.
