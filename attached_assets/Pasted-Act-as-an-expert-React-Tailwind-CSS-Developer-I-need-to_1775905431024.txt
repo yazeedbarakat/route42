@@ -1,0 +1,30 @@
+Act as an expert React/Tailwind CSS Developer. I need to fix a UI layout bug and synchronize the Map experience between the Student and Driver.
+
+Task 1: Fix Sidebar Overlap (Z-Index Issue)
+- Problem: The Leaflet map component is currently rendering on top of the Sidebar (it covers the Sidebar menu).
+- Fix:
+  - Locate the Sidebar component and its parent layout.
+  - Ensure the Sidebar has a higher z-index than the map (Leaflet uses z-index: 400 by default for its container).
+  - Apply z-[50] or z-[999] to the Sidebar and ensure it has position: relative, fixed, or sticky so the z-index takes effect.
+  - Alternatively, set the Map container's wrapper to z-0 or z-10 to keep it behind all navigation elements.
+
+Task 2: Unified "Active Route Map" for Students
+- Goal: The Student's RouteMap page should mirror the Driver's "Active Navigation" view once a trip has started, but in read-only mode only.
+- Requirements:
+  - Update the Student's RouteMap component logic.
+  - Fetch the current trip status for the student's booking.
+  - IF the trip is NOT started: Show the standard, quiet map (Dark Theme).
+  - IF the trip is 'in_progress' (Started by Driver):
+    1. Switch the Student's map to the Light Theme (CartoDB Light).
+    2. Render the OSRM Polyline (The green route).
+    3. Show the Animated Bus Marker moving along the path.
+    4. Display the same Stats Header (Next Stop, Progress %, etc.) at the top of the map, just like the Driver's view.
+    5. The Student map must be completely read-only: the student cannot add, edit, drag, delete, or modify anything on the map.
+    6. Disable all custom pickup interactions, map clicks, and route editing controls for the student.
+- This ensures that when the driver clicks "Start Trip", the student's map "wakes up" and shows live tracking, but only as a passive viewer.
+
+Task 3: Refactor for Consistency
+- Ensure that the MapComponent is reusable so that both DriverDashboard and StudentRouteMap use the same logic for rendering the "Active View".
+- Maintain the "42 Intranet V2" dark styling for all UI panels and buttons.
+
+Please provide the updated CSS/Tailwind fixes for the Sidebar and the refactored React code for the Student's Route Map.
