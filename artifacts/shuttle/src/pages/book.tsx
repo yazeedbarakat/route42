@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import {
   Clock, CheckCircle2, ChevronRight, Loader2,
   CalendarDays, Info, Navigation, ArrowRight, ArrowLeft, Users,
