@@ -6,13 +6,14 @@ import { Link, useLocation } from "wouter";
 import { useEffect } from "react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarPlus, Clock, MapPin, CheckCircle2, AlertCircle, ArrowRight, Zap, XCircle } from "lucide-react";
+import { CalendarPlus, Clock, MapPin, CheckCircle2, AlertCircle, ArrowRight, Zap, XCircle, ListOrdered } from "lucide-react";
 import { CancelBookingModal } from "@/components/cancel-booking-modal";
 import { canCancelBooking, minutesUntilDeparture } from "@/lib/cancel-utils";
 
 type BookingItem = {
   id: number;
   status: string;
+  waitlistPosition?: number | null;
   pickupType?: string;
   pickupName?: string | null;
   pickupPoint?: { name: string } | null;
@@ -22,7 +23,7 @@ type BookingItem = {
   } | null;
 };
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status, waitlistPosition }: { status: string; waitlistPosition?: number | null }) {
   if (status === "confirmed") return (
     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-400/10 text-emerald-400 border border-emerald-400/20">
       <CheckCircle2 size={11} />Confirmed
@@ -34,8 +35,9 @@ function StatusBadge({ status }: { status: string }) {
     </span>
   );
   if (status === "waiting") return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-400/10 text-blue-400 border border-blue-400/20">
-      <Clock size={11} />Waiting
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-400/10 text-orange-400 border border-orange-400/20">
+      <ListOrdered size={11} />
+      {waitlistPosition != null ? `Waitlisted #${waitlistPosition}` : "Waitlisted"}
     </span>
   );
   return (
@@ -217,7 +219,7 @@ export default function Dashboard() {
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                      <StatusBadge status={booking.status} />
+                      <StatusBadge status={booking.status} waitlistPosition={(booking as BookingItem).waitlistPosition} />
 
                       {/* Cancel button — only for active bookings */}
                       {isCancellableStatus && (

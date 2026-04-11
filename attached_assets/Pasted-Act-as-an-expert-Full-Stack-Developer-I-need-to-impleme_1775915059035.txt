@@ -1,0 +1,31 @@
+Act as an expert Full-Stack Developer. I need to implement an "Automated Waitlist System" for the 15-seat buses in my "Smart Shuttle Solution" project.
+
+**Goal:**
+If a trip reaches its 15-seat maximum capacity, subsequent students should be placed on a "Waitlist". If a confirmed student cancels their trip, the first student on the waitlist should be automatically promoted to "Confirmed" and notified immediately.
+
+**Task 1: Booking Logic Refactor (Backend)**
+* Update the `POST /api/bookings` endpoint.
+* When a student books a seat, count the current number of `confirmed` (and `pending` if applicable) bookings for that specific `tripId` or `timeSlot`.
+* If the count is `< 15`: Create the booking with status `confirmed` (or standard default).
+* If the count is `>= 15`: Create the booking with status `waitlisted`.
+
+**Task 2: The Auto-Promotion Engine (Cancellation Backend)**
+* Update the existing Cancellation logic (`PATCH /api/bookings/:id/cancel`).
+* Wrap the cancellation process in a Database Transaction (to prevent race conditions).
+* **Step 1:** Cancel the requested booking.
+* **Step 2:** Query for the oldest `waitlisted` booking for that exact same trip (order by `createdAt` ASC).
+* **Step 3:** If a waitlisted booking exists, update its status to `confirmed`.
+* **Step 4:** Automatically trigger a global Notification to that specific promoted student. 
+  - Message: "Great news! A seat opened up and your waitlisted ride for [Time] is now Confirmed."
+
+**Task 3: Student UI Updates**
+* **Booking Page:** When checking available times, if a slot has 15/15 seats, do not disable it. Instead, change the button text to "Join Waitlist".
+* **Dashboard / My Ride:** Update the UI to clearly show the `waitlisted` status (e.g., an Orange/Yellow badge). 
+  - Show the student their position in the queue if possible (e.g., "Waitlisted - You are #1 in line").
+  - Make sure the live tracking map (in `MyRide`) is NOT active for waitlisted students, show them a "Waiting for a seat..." empty state instead.
+
+**Constraints:**
+* Use robust database queries (e.g., Transactions) to ensure two students are never promoted to the same single cancelled seat.
+* Keep the "42 Intranet V2" dark theme styling for the new waitlist UI badges.
+
+Please provide the updated Backend controllers for Booking and Cancellation, and the UI logic for displaying the waitlist status to the student.

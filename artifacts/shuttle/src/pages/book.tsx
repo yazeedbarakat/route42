@@ -302,7 +302,7 @@ export default function Book() {
                       const isFull      = trip ? trip.bookedSeats >= trip.totalSeats : false;
                       const isWaitlist  = trip ? trip.bookedSeats >= MAX_CAPACITY : false;
                       const tooSoon     = selectedIsToday && !isSlotAvailableToday(slot);
-                      const isDisabled  = isFull || tooSoon;
+                      const isDisabled  = tooSoon;
                       const isSelected  = selectedTime === slot;
 
                       return (

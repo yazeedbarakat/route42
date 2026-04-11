@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, tripsTable, bookingsTable, pickupPointsTable, notificationsTable, usersTable } from "@workspace/db";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, lte } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import { GetTripsQueryParams, ConfirmTripParams, CancelTripParams } from "@workspace/api-zod";
 
@@ -483,7 +483,68 @@ router.get("/student/my-ride", requireAuth, async (req, res): Promise<void> => {
     ));
 
   const activeTrip = todayTrips.find(t => tripIds.includes(t.id));
-  if (!activeTrip) { res.json({ status: "none" }); return; }
+
+  if (!activeTrip) {
+    // Check if the student has a waitlisted (waiting) booking for a today's trip
+    const waitlistBookings = myBookings.filter(b => b.bookingStatus === "waiting");
+    const waitlistTripIds = waitlistBookings.map(b => b.tripId).filter((id): id is number => id !== null);
+
+    if (waitlistTripIds.length > 0) {
+      const [waitlistTrip] = await db
+        .select()
+        .from(tripsTable)
+        .where(and(
+          eq(tripsTable.date, today),
+          sql`${tripsTable.status} != 'canceled'`,
+          inArray(tripsTable.id, waitlistTripIds)
+        ));
+
+      if (waitlistTrip) {
+        const myWaitlistBooking = waitlistBookings.find(b => b.tripId === waitlistTrip.id)!;
+
+        const posResult = await db
+          .select({ cnt: sql<number>`count(*)::int` })
+          .from(bookingsTable)
+          .where(and(
+            eq(bookingsTable.tripId, waitlistTrip.id),
+            eq(bookingsTable.status, "waiting"),
+            lte(bookingsTable.id, myWaitlistBooking.bookingId)
+          ));
+        const waitlistPosition = posResult[0]?.cnt ?? null;
+
+        const [wDriver] = await db
+          .select({ name: usersTable.name, driverId: usersTable.driverId, phone: usersTable.phone })
+          .from(usersTable)
+          .where(eq(usersTable.role, "driver"))
+          .limit(1);
+
+        res.json({
+          status: "waitlisted",
+          booking: {
+            id: myWaitlistBooking.bookingId,
+            pickupType: myWaitlistBooking.pickupType,
+            pickupName: myWaitlistBooking.pickupName,
+            customLat: myWaitlistBooking.customLat,
+            customLng: myWaitlistBooking.customLng,
+            waitlistPosition,
+          },
+          trip: {
+            id: waitlistTrip.id,
+            date: waitlistTrip.date,
+            departureTime: waitlistTrip.departureTime,
+            direction: waitlistTrip.direction,
+            totalSeats: waitlistTrip.totalSeats,
+            bookedSeats: waitlistTrip.bookedSeats,
+          },
+          driver: wDriver ? { name: wDriver.name, driverId: wDriver.driverId, phone: wDriver.phone ?? null } : null,
+        });
+        return;
+      }
+    }
+
+    res.json({ status: "none" });
+    return;
+  }
 
   const myBooking = myBookings.find(b => b.tripId === activeTrip.id)!;
 

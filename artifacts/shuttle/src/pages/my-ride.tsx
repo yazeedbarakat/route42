@@ -11,8 +11,8 @@ import {
 } from "@/components/route-map";
 import {
   Bus, Radio, Clock, MapPin, CalendarDays, Navigation,
-  User, Hash, ArrowRight, CheckCircle2, Loader2, Ticket,
-  Phone, AlertCircle,
+  User, ArrowRight, CheckCircle2, Loader2, Ticket,
+  Phone, AlertCircle, ListOrdered,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -27,13 +27,14 @@ interface Passenger {
 }
 
 interface MyRideResponse {
-  status: "none" | "confirmed" | "in_progress";
+  status: "none" | "confirmed" | "in_progress" | "waitlisted";
   booking?: {
     id: number;
     pickupType: "fixed" | "custom";
     pickupName: string | null;
     customLat: number | null;
     customLng: number | null;
+    waitlistPosition?: number | null;
   };
   trip?: {
     id: number;
@@ -66,6 +67,102 @@ function resolvePassengerStop(p: Passenger): CustomBooking | null {
 
 function directionLabel(dir: string) {
   return dir === "to_campus" || dir === "to_school" ? "→ 42 Irbid Campus" : "← From Campus";
+}
+
+// ─── Waitlisted View ──────────────────────────────────────────────────────────
+function WaitlistedView({ data }: {
+  data: {
+    booking: NonNullable<MyRideResponse["booking"]>;
+    trip: NonNullable<MyRideResponse["trip"]>;
+    driver: MyRideResponse["driver"];
+  };
+}) {
+  const { booking, trip } = data;
+  const position = booking.waitlistPosition;
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-white">My Ride</h1>
+          <p className="text-[#a7b0c0] text-sm mt-0.5">You're in the queue — we'll grab you a seat!</p>
+        </div>
+        <div className="sm:ml-auto flex items-center gap-2 px-3 py-1.5 bg-orange-400/10 border border-orange-400/20 rounded-lg">
+          <ListOrdered size={13} className="text-orange-400" />
+          <span className="text-xs text-orange-400 font-semibold">Waitlisted</span>
+        </div>
+      </div>
+
+      {/* Position card */}
+      <div className="bg-[#090d14] border border-orange-400/25 rounded-2xl p-6 text-center">
+        <div className="w-16 h-16 rounded-2xl bg-orange-400/10 border border-orange-400/20 flex items-center justify-center mx-auto mb-4">
+          <ListOrdered size={28} className="text-orange-400" />
+        </div>
+        {position != null ? (
+          <>
+            <p className="text-4xl font-bold font-mono text-white mb-1">#{position}</p>
+            <p className="text-[#a7b0c0] text-sm">in the waitlist queue</p>
+          </>
+        ) : (
+          <p className="text-lg font-semibold text-white">On the Waitlist</p>
+        )}
+        <p className="text-xs text-[#a7b0c0] mt-3 max-w-xs mx-auto leading-relaxed">
+          If a confirmed student cancels, you'll be automatically promoted and notified immediately.
+        </p>
+
+        <div className="mt-4 flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-400/[0.06] border border-orange-400/15 rounded-xl">
+          <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+          <span className="text-xs text-orange-300 font-medium">Waiting for a seat to open up…</span>
+        </div>
+      </div>
+
+      {/* Trip details */}
+      <div className="bg-white/[0.03] border border-white/[0.08] rounded-xl p-4 space-y-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-[#a7b0c0]">Trip Details</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex items-center gap-3">
+            <Clock size={14} className="text-[#ff2e88] shrink-0" />
+            <div>
+              <p className="text-[10px] text-[#a7b0c0]">Departure</p>
+              <p className="text-sm font-semibold text-white font-mono">{trip.departureTime}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <CalendarDays size={14} className="text-[#22d3ee] shrink-0" />
+            <div>
+              <p className="text-[10px] text-[#a7b0c0]">Date</p>
+              <p className="text-sm font-semibold text-white">{trip.date}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Navigation size={14} className="text-[#7c3aed] shrink-0" />
+            <div>
+              <p className="text-[10px] text-[#a7b0c0]">Direction</p>
+              <p className="text-sm font-semibold text-white">{directionLabel(trip.direction)}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Bus size={14} className="text-[#a7b0c0] shrink-0" />
+            <div>
+              <p className="text-[10px] text-[#a7b0c0]">Capacity</p>
+              <p className="text-sm font-semibold text-white font-mono">{trip.bookedSeats} / {trip.totalSeats}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Notice: no live map */}
+      <div className="flex items-start gap-3 px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl">
+        <AlertCircle size={15} className="text-[#a7b0c0] shrink-0 mt-0.5" />
+        <p className="text-xs text-[#a7b0c0] leading-relaxed">
+          Live tracking and ride details will appear here once a seat is confirmed for you.
+          You can <Link href="/history" className="text-[#22d3ee] hover:underline">manage your bookings</Link> or{" "}
+          <Link href="/book" className="text-[#ff2e88] hover:underline">book a different time slot</Link>.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 // ─── Empty State ───────────────────────────────────────────────────────────────
@@ -430,6 +527,18 @@ export default function MyRide() {
 
   if (!data || data.status === "none") {
     return <EmptyState />;
+  }
+
+  if (data.status === "waitlisted" && data.booking && data.trip) {
+    return (
+      <WaitlistedView
+        data={{
+          booking: data.booking,
+          trip: data.trip,
+          driver: data.driver ?? null,
+        }}
+      />
+    );
   }
 
   if (data.status === "confirmed" && data.booking && data.trip) {

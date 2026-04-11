@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, bookingsTable, tripsTable, pickupPointsTable, usersTable, notificationsTable } from "@workspace/db";
-import { eq, and, desc, asc, ne } from "drizzle-orm";
+import { eq, and, desc, asc, ne, lte, sql } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import {
   CreateBookingBody,
@@ -89,6 +89,19 @@ async function formatBooking(booking: typeof bookingsTable.$inferSelect) {
     : [undefined];
   const [user] = await db.select().from(usersTable).where(eq(usersTable.id, booking.userId));
 
+  let waitlistPosition: number | null = null;
+  if (booking.status === "waiting") {
+    const posResult = await db
+      .select({ cnt: sql<number>`count(*)::int` })
+      .from(bookingsTable)
+      .where(and(
+        eq(bookingsTable.tripId, booking.tripId),
+        eq(bookingsTable.status, "waiting"),
+        lte(bookingsTable.id, booking.id),
+      ));
+    waitlistPosition = posResult[0]?.cnt ?? null;
+  }
+
   return {
     id: booking.id,
     userId: booking.userId,
@@ -99,6 +112,7 @@ async function formatBooking(booking: typeof bookingsTable.$inferSelect) {
     customLat: booking.customLat,
     customLng: booking.customLng,
     status: booking.status,
+    waitlistPosition,
     createdAt: booking.createdAt.toISOString(),
     trip: trip ? {
       id: trip.id,
@@ -157,8 +171,8 @@ async function promoteWaitingBooking(tripId: number) {
 
   await sendNotification(
     firstWaiting.userId,
-    `Your ride is confirmed! A seat opened up for the ${trip.date} ${trip.departureTime} shuttle. You've been moved from the waiting list.`,
-    "booking_update",
+    `Great news! A seat opened up and your waitlisted ride for ${trip.departureTime} is now Confirmed. Head to 'My Ride' for details.`,
+    "trip_confirmed",
   );
 }
 
