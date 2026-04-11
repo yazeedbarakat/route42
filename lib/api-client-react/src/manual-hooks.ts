@@ -103,6 +103,62 @@ export const useGetCustomPickupsHistory = <TError = ErrorType<unknown>>(options?
   });
 };
 
+// ─── Time Slots ───────────────────────────────────────────────────────────────
+
+export interface TimeSlot {
+  id: number;
+  timeString: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const getTimeSlots = async (): Promise<TimeSlot[]> => {
+  return customFetch<TimeSlot[]>("/api/timeslots");
+};
+
+export const useGetTimeSlots = <TError = ErrorType<unknown>>(options?: {
+  query?: UseQueryOptions<TimeSlot[], TError>;
+}): UseQueryResult<TimeSlot[], TError> => {
+  return useQuery<TimeSlot[], TError>({
+    queryKey: ["timeslots"],
+    queryFn: getTimeSlots,
+    staleTime: 30_000,
+    ...options?.query,
+  });
+};
+
+export const addTimeSlot = async (body: { timeString: string }): Promise<TimeSlot> => {
+  return customFetch<TimeSlot>("/api/admin/timeslots", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+};
+
+export const useAddTimeSlot = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<TimeSlot, TError, { timeString: string }, TContext>;
+}): UseMutationResult<TimeSlot, TError, { timeString: string }, TContext> => {
+  return useMutation<TimeSlot, TError, { timeString: string }, TContext>({
+    mutationFn: (data) => addTimeSlot(data),
+    ...options?.mutation,
+  });
+};
+
+export const deleteTimeSlot = async (id: number): Promise<{ success: boolean; id: number }> => {
+  return customFetch<{ success: boolean; id: number }>(`/api/admin/timeslots/${id}`, {
+    method: "DELETE",
+  });
+};
+
+export const useDeleteTimeSlot = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<{ success: boolean; id: number }, TError, number, TContext>;
+}): UseMutationResult<{ success: boolean; id: number }, TError, number, TContext> => {
+  return useMutation<{ success: boolean; id: number }, TError, number, TContext>({
+    mutationFn: (id) => deleteTimeSlot(id),
+    ...options?.mutation,
+  });
+};
+
 // ─── Admin: Stat Card Drill-Down ──────────────────────────────────────────────
 
 export type StatCardKey =

@@ -1,0 +1,84 @@
+Act as an expert Full-Stack Developer. I need to build a Dynamic Schedule Manager for the Admin Panel in my "Smart Shuttle Solution", replacing all hardcoded trip times and adding a global notification trigger.
+
+Use the existing backend stack and frontend architecture in the project. Keep the implementation production-ready, secure, and consistent with the current "42 Intranet V2" dark UI.
+
+Task 1: Database Model + API for Dynamic Time Slots
+- Replace any hardcoded time arrays with a persistent `TimeSlots` database model/table.
+- The model should include at least:
+  - `id`
+  - `timeString` (required, unique, human-readable format such as "08:00 AM")
+  - `isActive` (boolean, default true)
+  - `createdAt`
+  - `updatedAt`
+- Seed the database with the current default schedule times used in the app.
+- Add a uniqueness check so duplicate time slots cannot be created.
+- Validate the time format on the server before saving.
+
+Create these endpoints:
+- `GET /api/timeslots`
+  - Public or authenticated users can fetch available time slots.
+  - Return only active slots.
+  - Sort them in ascending time order.
+- `POST /api/admin/timeslots`
+  - Admin only.
+  - Accept a `timeString` in the request body.
+  - Validate the format.
+  - Reject duplicates with a clear error message.
+  - Create the new slot.
+- `DELETE /api/admin/timeslots/:id`
+  - Admin only.
+  - Remove the selected slot by id.
+  - Return an error if the slot does not exist.
+
+Strictly enforce `role === 'admin'` on POST and DELETE routes using middleware or route guards.
+Return proper HTTP status codes:
+- 200/201 on success
+- 400 for invalid input
+- 401 for unauthenticated access
+- 403 for unauthorized access
+- 404 for missing records
+
+Task 2: Global Notification Trigger
+- Every successful time-slot add or delete operation must automatically create a global notification record in the database for students.
+- The notification should be visible in the student notification bell/dropdown.
+- Notification content:
+  - Title: "Schedule Updated"
+  - Message: "The trip schedule has been updated by the Admin. Check the new available times!"
+  - Type: `schedule_update`
+  - Audience: `students`
+  - Read status: `false`
+- Create the notification in the same transaction or a safe equivalent so the schedule change and notification stay in sync.
+- If the notification system already exists, reuse it instead of creating a separate notification flow.
+
+Task 3: Admin UI — Manage Schedule
+- Add a new section/card/modal in the Admin Dashboard called "Manage Schedule".
+- Show the current list of time slots fetched from the API.
+- Add an input field to enter a new time.
+- Add an "Add" button to submit the new slot.
+- Show a delete/trash button next to each existing time slot.
+- After add/delete, refresh the list immediately so the UI stays in sync with the database.
+- Display loading, success, and error states clearly.
+- Keep the styling aligned with the existing dark theme, rounded cards, and subtle borders.
+
+Task 4: Student Booking Page Integration
+- Update `BookingPage.jsx` so it no longer uses any hardcoded times.
+- Fetch time slots dynamically from `GET /api/timeslots`.
+- Use `SWR` or `React Query` for fetching, caching, and automatic revalidation.
+- The dropdown/options must update when the admin adds or deletes a time slot.
+- If a time is removed by the admin, it should disappear from the student UI on the next revalidation.
+- If a new time is added, it should appear without requiring a page reload.
+- Keep the existing booking flow and form logic unchanged except for the time selector source.
+
+Implementation requirements:
+- Write clean, modular code.
+- Keep backend validation strict.
+- Reuse existing auth and notification infrastructure where possible.
+- Avoid duplicating logic across components.
+- Include any necessary model, route, controller, and component code.
+
+Please provide:
+1. The backend model/schema for TimeSlots
+2. The backend API routes/controllers for fetching, adding, and deleting time slots
+3. The notification creation logic
+4. The Admin "Manage Schedule" UI component
+5. The updated Student booking time selector component

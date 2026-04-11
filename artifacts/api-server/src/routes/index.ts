@@ -7,6 +7,7 @@ import statsRouter from "./stats";
 import notificationsRouter from "./notifications";
 import customPickupsRouter from "./custom-pickups";
 import statDetailsRouter from "./stat-details";
+import timeslotsRouter from "./timeslots";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(statsRouter);
 router.use(notificationsRouter);
 router.use(customPickupsRouter);
 router.use(statDetailsRouter);
+router.use(timeslotsRouter);
 
 export default router;

@@ -1,6 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
-import { db, pickupPointsTable, usersTable } from "@workspace/db";
+import { db, pickupPointsTable, usersTable, timeSlotsTable } from "@workspace/db";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 
@@ -133,6 +133,19 @@ app.listen(port, async (err) => {
     if (existingPickupTerminals.length === 0) {
       // Seed official pickup terminals so maps are database-backed immediately after a remix/reset.
       await db.insert(pickupPointsTable).values(defaultPickupTerminals);
+    }
+
+    // Seed default time slots if none exist yet.
+    const existingSlots = await db.select().from(timeSlotsTable);
+    if (existingSlots.length === 0) {
+      const defaultSlots = [
+        "08:00 AM", "10:00 AM", "12:00 PM",
+        "01:00 PM", "02:00 PM", "03:00 PM",
+        "04:00 PM", "05:00 PM", "06:00 PM", "07:00 PM",
+      ];
+      await db.insert(timeSlotsTable).values(
+        defaultSlots.map(timeString => ({ timeString, isActive: true })),
+      );
     }
 
     logger.info("Demo credentials are ready");

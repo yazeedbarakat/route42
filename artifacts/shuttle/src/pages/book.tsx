@@ -1,4 +1,4 @@
-import { useGetTrips, useGetPickupPoints, useCreateBooking, useGetBookings } from "@workspace/api-client-react";
+import { useGetTrips, useGetPickupPoints, useCreateBooking, useGetBookings, useGetTimeSlots } from "@workspace/api-client-react";
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
@@ -12,11 +12,6 @@ import {
 import { RouteMap } from "@/components/route-map";
 
 type Direction = "inbound" | "outbound";
-
-const TIME_SLOTS: Record<Direction, string[]> = {
-  inbound:  ["08:00 AM", "10:00 AM", "12:00 PM", "02:00 PM", "04:00 PM", "06:00 PM"],
-  outbound: ["01:00 PM", "03:00 PM", "05:00 PM", "07:00 PM"],
-};
 
 const MAX_CAPACITY = 15;
 
@@ -86,7 +81,12 @@ export default function Book() {
   const { data: trips, isLoading: tripsLoading } = useGetTrips({ date: selectedDate });
   const { data: pickupPoints } = useGetPickupPoints();
   const { data: myBookings } = useGetBookings();
+  const { data: timeSlots = [], isLoading: slotsLoading } = useGetTimeSlots({
+    query: { refetchInterval: 30_000 },
+  });
   const createBooking = useCreateBooking();
+
+  const activeSlots = timeSlots.map(s => s.timeString);
 
   // ── Direction conflict: 1 inbound + 1 outbound max per calendar date ─────
   // Map frontend direction to the db value stored on trip.direction
@@ -266,15 +266,20 @@ export default function Book() {
               )}
 
               {/* Time Slot Chips */}
-              {tripsLoading ? (
+              {tripsLoading || slotsLoading ? (
                 <div className="flex items-center gap-2 py-3 text-[#a7b0c0] text-sm">
                   <Loader2 size={16} className="animate-spin" />Loading trip availability...
                 </div>
               ) : (
                 <div className="space-y-2">
                   <p className="text-xs text-[#a7b0c0] font-medium uppercase tracking-wider">Available times</p>
+                  {activeSlots.length === 0 && (
+                    <div className="flex items-center gap-2 py-2 text-[#a7b0c0] text-sm">
+                      <Info size={15} />No time slots are currently available. Check back soon.
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-2">
-                    {TIME_SLOTS[direction].map((slot) => {
+                    {activeSlots.map((slot) => {
                       const trip = trips?.find(t => {
                         const norm = (s: string) => s.replace(/\s/g, "").toUpperCase();
                         return norm(t.departureTime) === norm(slot);

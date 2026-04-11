@@ -2,15 +2,17 @@ import {
   useGetDashboardStats, useGetTripDemand, useConfirmTrip, useCancelTrip,
   useGetCustomPickupsHistory, type StatCardKey,
   getGetDashboardStatsQueryKey, getGetTripDemandQueryKey,
+  useGetTimeSlots, useAddTimeSlot, useDeleteTimeSlot,
 } from "@workspace/api-client-react";
 import { useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useLocation, Link } from "wouter";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Users, CalendarCheck, Clock, TrendingUp, CheckCircle2, AlertCircle,
   XCircle, ArrowRight, Loader2, BarChart3, Shield, Map, ChevronRight,
+  CalendarClock, Plus, Trash2,
 } from "lucide-react";
 import { RouteMap } from "@/components/route-map";
 import { StatDetailsModal } from "@/components/stat-details-modal";
@@ -128,6 +130,13 @@ export default function AdminDashboard() {
   const { data: hotspots = [], isLoading: hotspotsLoading } = useGetCustomPickupsHistory({
     query: { enabled: user?.role === "admin" },
   });
+  const { data: timeSlots = [], isLoading: slotsLoading } = useGetTimeSlots();
+  const addSlotMutation    = useAddTimeSlot();
+  const deleteSlotMutation = useDeleteTimeSlot();
+  const [newTimeInput, setNewTimeInput] = useState("");
+  const [showSchedule, setShowSchedule] = useState(false);
+  const newTimeRef = useRef<HTMLInputElement>(null);
+
   const confirmTrip = useConfirmTrip();
   const cancelTrip  = useCancelTrip();
 
@@ -154,6 +163,31 @@ export default function AdminDashboard() {
       invalidateStats();
     } catch (err: any) {
       toast({ title: "Error", description: err?.message, variant: "destructive" });
+    }
+  };
+
+  const handleAddSlot = async () => {
+    const val = newTimeInput.trim();
+    if (!val) return;
+    try {
+      await addSlotMutation.mutateAsync({ timeString: val });
+      setNewTimeInput("");
+      queryClient.invalidateQueries({ queryKey: ["timeslots"] });
+      toast({ title: "Time slot added", description: `${val} is now in the schedule.` });
+      newTimeRef.current?.focus();
+    } catch (err: any) {
+      toast({ title: "Failed to add slot", description: err?.message || "Please try again.", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteSlot = async (id: number, label: string) => {
+    if (!confirm(`Remove "${label}" from the schedule?`)) return;
+    try {
+      await deleteSlotMutation.mutateAsync(id);
+      queryClient.invalidateQueries({ queryKey: ["timeslots"] });
+      toast({ title: "Time slot removed", description: `${label} has been removed.` });
+    } catch (err: any) {
+      toast({ title: "Failed to remove slot", description: err?.message || "Please try again.", variant: "destructive" });
     }
   };
 
@@ -294,6 +328,99 @@ export default function AdminDashboard() {
               })}
             </div>
           </>
+        )}
+      </div>
+
+      {/* ── Manage Schedule Panel ── */}
+      <div className="bg-white/[0.03] border border-purple-400/20 rounded-xl overflow-hidden">
+        <button
+          onClick={() => setShowSchedule(v => !v)}
+          className="w-full px-5 py-4 flex items-center justify-between hover:bg-white/[0.02] transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-purple-400/10 border border-purple-400/20 flex items-center justify-center">
+              <CalendarClock size={16} className="text-purple-400" />
+            </div>
+            <div className="text-left">
+              <p className="font-semibold text-white text-sm">Manage Schedule</p>
+              <p className="text-xs text-[#a7b0c0]">
+                {slotsLoading ? "Loading…" : `${timeSlots.length} active time slot${timeSlots.length !== 1 ? "s" : ""}`}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-purple-400 bg-purple-400/10 border border-purple-400/20 px-2.5 py-1 rounded-full font-medium">
+              {timeSlots.length} slots
+            </span>
+            <span className="text-[#a7b0c0] text-sm">{showSchedule ? "▲" : "▼"}</span>
+          </div>
+        </button>
+
+        {showSchedule && (
+          <div className="border-t border-white/[0.06]">
+            {/* Add new slot */}
+            <div className="px-5 py-4 border-b border-white/[0.04]">
+              <p className="text-xs font-semibold text-[#a7b0c0] uppercase tracking-wider mb-3">Add New Time Slot</p>
+              <div className="flex gap-2">
+                <input
+                  ref={newTimeRef}
+                  type="text"
+                  value={newTimeInput}
+                  onChange={e => setNewTimeInput(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleAddSlot()}
+                  placeholder="e.g. 09:00 AM"
+                  className="flex-1 bg-white/[0.04] border border-white/[0.10] rounded-lg px-3 py-2 text-sm text-white placeholder:text-[#a7b0c0]/50 focus:outline-none focus:border-purple-400/50 focus:bg-white/[0.06] transition-colors font-mono"
+                />
+                <button
+                  onClick={handleAddSlot}
+                  disabled={addSlotMutation.isPending || !newTimeInput.trim()}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-purple-400/10 text-purple-400 border border-purple-400/20 text-sm font-medium hover:bg-purple-400/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {addSlotMutation.isPending
+                    ? <Loader2 size={14} className="animate-spin" />
+                    : <Plus size={14} />}
+                  Add
+                </button>
+              </div>
+              <p className="text-[10px] text-[#a7b0c0]/60 mt-2">
+                Format: <span className="font-mono text-purple-400/70">08:00 AM</span> — students will see updated times immediately on next refresh.
+              </p>
+            </div>
+
+            {/* Existing slots */}
+            <div className="px-5 py-4">
+              <p className="text-xs font-semibold text-[#a7b0c0] uppercase tracking-wider mb-3">Current Schedule</p>
+              {slotsLoading ? (
+                <div className="flex items-center gap-2 text-[#a7b0c0] text-sm py-2">
+                  <Loader2 size={15} className="animate-spin text-purple-400" />Loading slots…
+                </div>
+              ) : timeSlots.length === 0 ? (
+                <p className="text-sm text-[#a7b0c0]">No time slots configured. Add one above.</p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {timeSlots.map(slot => (
+                    <div
+                      key={slot.id}
+                      className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-white/[0.03] border border-purple-400/10 hover:border-purple-400/25 transition-colors group"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Clock size={12} className="text-purple-400 shrink-0" />
+                        <span className="text-sm font-mono font-semibold text-white truncate">{slot.timeString}</span>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteSlot(slot.id, slot.timeString)}
+                        disabled={deleteSlotMutation.isPending}
+                        className="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg text-[#a7b0c0] hover:text-red-400 hover:bg-red-400/10 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-30"
+                        title={`Remove ${slot.timeString}`}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
