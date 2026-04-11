@@ -114,7 +114,15 @@ export default function Login() {
   };
 
   const handleGoogleSignIn = () => {
-    window.location.href = "/api/auth/google";
+    const isEmbedded = (() => {
+      try { return window.self !== window.top; } catch { return true; }
+    })();
+    const oauthUrl = "/api/auth/google";
+    if (isEmbedded) {
+      window.open(oauthUrl, "_blank");
+    } else {
+      window.location.href = oauthUrl;
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
