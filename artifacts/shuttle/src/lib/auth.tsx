@@ -24,7 +24,17 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function useTokenState() {
   const [token, setTokenState] = useState<string | null>(() => {
-    return localStorage.getItem("shuttle_token");
+    // Prefer token from OAuth redirect URL so it's available before any query fires
+    const urlToken = new URLSearchParams(window.location.search).get("token");
+    if (urlToken) {
+      localStorage.setItem("shuttle_token", urlToken);
+      window.history.replaceState({}, "", window.location.pathname);
+      setAuthTokenGetter(() => urlToken);
+      return urlToken;
+    }
+    const stored = localStorage.getItem("shuttle_token");
+    if (stored) setAuthTokenGetter(() => stored);
+    return stored;
   });
 
   const setToken = (newToken: string | null) => {
@@ -36,6 +46,19 @@ function useTokenState() {
     setTokenState(newToken);
     setAuthTokenGetter(newToken ? () => newToken : null);
   };
+
+  // Sync across tabs — when another tab logs in/out, update this tab too
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "shuttle_token") {
+        const newToken = e.newValue;
+        setTokenState(newToken);
+        setAuthTokenGetter(newToken ? () => newToken : null);
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
 
   useEffect(() => {
     setAuthTokenGetter(token ? () => token : null);
