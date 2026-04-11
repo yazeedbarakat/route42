@@ -18,6 +18,8 @@ export const usersTable = pgTable("users", {
   // Unique driver identifier — set only for driver accounts created by admin.
   // Drivers authenticate with this ID alone (no email/password required).
   driverId: text("driver_id").unique(),
+  // Base64-encoded profile picture (data URI). Stored directly in DB for simplicity.
+  profilePicture: text("profile_picture"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -7,6 +7,8 @@ export interface UserData {
   name: string;
   email: string;
   role: string;
+  phone: string | null;
+  profilePicture: string | null;
   createdAt: string;
 }
 
@@ -69,11 +71,13 @@ function AuthProviderInner({ children, token, setToken }: { children: ReactNode;
   };
 
   const userData = user ? {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    createdAt: user.createdAt,
+    id:             user.id,
+    name:           user.name,
+    email:          user.email,
+    role:           user.role,
+    phone:          (user as unknown as { phone?: string | null }).phone ?? null,
+    profilePicture: (user as unknown as { profilePicture?: string | null }).profilePicture ?? null,
+    createdAt:      user.createdAt,
   } : null;
 
   return (

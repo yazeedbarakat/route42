@@ -20,6 +20,7 @@ import AdminSchedule from "@/pages/admin-schedule";
 import DriverDashboard from "@/pages/driver";
 import Notifications from "@/pages/notifications";
 import MyRide from "@/pages/my-ride";
+import Profile from "@/pages/profile";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +42,7 @@ function Router() {
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/driver" component={DriverDashboard} />
         <Route path="/notifications" component={Notifications} />
+        <Route path="/profile" component={Profile} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

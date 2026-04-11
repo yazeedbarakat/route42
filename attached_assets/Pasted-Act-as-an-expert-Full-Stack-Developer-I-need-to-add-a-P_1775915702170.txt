@@ -1,0 +1,28 @@
+Act as an expert Full-Stack Developer. I need to add a "Profile Management" feature for students in my "Smart Shuttle Solution" project, allowing them to update their personal info and upload a profile picture.
+
+**Task 1: Database Schema & API Update**
+* Update the `User` model/schema to include a new field: `profilePicture` (String/Text).
+* Create a new protected endpoint: `PATCH /api/student/profile`.
+* This endpoint must accept updates for: `name`, `phoneNumber`, and `profilePicture`.
+* **Image Upload Strategy:** For the profile picture, accept a `base64` string. This keeps the implementation lightweight without requiring external storage buckets (like S3/Cloudinary) at this stage. 
+* **Security:** Strictly ensure the authenticated user can ONLY update their own database record.
+
+**Task 2: Student Profile Page UI (`/student/profile`)**
+* Create a new page dedicated to Profile Management.
+* Add a link to this page in the Student Sidebar/Navbar (e.g., "My Profile" with a user gear icon).
+* Build a sleek, dark-themed form containing:
+  1. A circular Profile Picture preview at the top.
+  2. A hidden file input triggered by a "Change Avatar" button. When the student selects an image, preview it immediately and convert it to a `base64` string in the frontend state.
+  3. Input fields for `Name` and `Phone Number` (pre-filled with their current database values).
+  4. A "Save Changes" button with proper loading, success, and error states.
+
+**Task 3: Global UI Sync & Session Update**
+* Update the Navbar/Sidebar layout. Wherever the student's name or avatar is displayed across the app, it should now fetch and show the new `profilePicture`. 
+* If `profilePicture` is null/empty, fallback to a generic avatar or the first letter of their name.
+* Use NextAuth's `update()` function (if using NextAuth) or mutate the `SWR`/`React Query` cache so the new profile picture and name reflect across the entire dashboard instantly without requiring a hard page reload.
+
+**Constraints:**
+* Keep the "42 Intranet V2" dark theme styling.
+* Validate the image size on the frontend before converting to base64 (e.g., max 2MB) to prevent database payload issues.
+
+Please provide the updated User schema/model, the API route logic, and the new `StudentProfile.jsx` component.

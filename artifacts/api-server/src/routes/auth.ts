@@ -483,11 +483,13 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
       return;
     }
     res.json({
-      id:        account.id,
-      name:      account.name,
-      email:     account.email,
-      role:      "student",
-      createdAt: new Date().toISOString(),
+      id:             account.id,
+      name:           account.name,
+      email:          account.email,
+      role:           "student",
+      phone:          null,
+      profilePicture: null,
+      createdAt:      new Date().toISOString(),
     });
     return;
   }
@@ -498,11 +500,69 @@ router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   res.json({
-    id:        user.id,
-    name:      user.name,
-    email:     user.email,
-    role:      user.role,
-    createdAt: user.createdAt.toISOString(),
+    id:             user.id,
+    name:           user.name,
+    email:          user.email,
+    role:           user.role,
+    phone:          user.phone ?? null,
+    profilePicture: user.profilePicture ?? null,
+    createdAt:      user.createdAt.toISOString(),
+  });
+});
+
+// ─── Student: update own profile ─────────────────────────────────────────────
+const UpdateProfileBody = z.object({
+  name:           z.string().min(2).max(80).optional(),
+  phone:          z.string().max(30).nullable().optional(),
+  profilePicture: z.string().nullable().optional(),
+});
+
+router.patch("/student/profile", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.user!.userId;
+
+  if (userId < 0) {
+    res.status(403).json({ error: "Cannot update test accounts." });
+    return;
+  }
+
+  const parsed = UpdateProfileBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request body." });
+    return;
+  }
+
+  const { name, phone, profilePicture } = parsed.data;
+
+  // Only set fields that were actually provided
+  const updates: Record<string, unknown> = {};
+  if (name !== undefined)           updates.name           = name;
+  if (phone !== undefined)          updates.phone          = phone;
+  if (profilePicture !== undefined) updates.profilePicture = profilePicture;
+
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ error: "No fields to update." });
+    return;
+  }
+
+  const [updated] = await db
+    .update(usersTable)
+    .set(updates)
+    .where(eq(usersTable.id, userId))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+
+  res.json({
+    id:             updated.id,
+    name:           updated.name,
+    email:          updated.email,
+    role:           updated.role,
+    phone:          updated.phone ?? null,
+    profilePicture: updated.profilePicture ?? null,
+    createdAt:      updated.createdAt.toISOString(),
   });
 });
 

@@ -4,7 +4,7 @@ import { useGetNotifications } from "@workspace/api-client-react";
 import { 
   LayoutDashboard, CalendarPlus, History, Map, Bus,
   BookOpen, Truck, Bell, LogOut, 
-  ChevronRight, Menu, X, UsersRound, MapPin, CalendarClock
+  ChevronRight, Menu, X, UsersRound, MapPin, CalendarClock, UserCog
 } from "lucide-react";
 
 import { useState } from "react";
@@ -33,6 +33,7 @@ const NAV_LINKS = {
     { href: "/book", label: "Book a Ride", icon: CalendarPlus },
     { href: "/my-ride", label: "My Ride", icon: Bus },
     { href: "/history", label: "My Bookings", icon: History },
+    { href: "/profile", label: "My Profile", icon: UserCog },
   ],
   admin: [
     { href: "/admin", label: "Overview", icon: LayoutDashboard },
@@ -143,8 +144,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="px-4 py-4 border-b border-white/[0.06]">
           <div className={`rounded-xl border p-3 ${roleBg}`}>
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#ff2e88]/20 to-[#22d3ee]/20 border border-white/10 flex items-center justify-center shrink-0">
-                <span className="text-sm font-bold text-white">{user.name.charAt(0).toUpperCase()}</span>
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#ff2e88]/20 to-[#22d3ee]/20 border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+                {user.profilePicture ? (
+                  <img src={user.profilePicture} alt={user.name} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-sm font-bold text-white">{user.name.charAt(0).toUpperCase()}</span>
+                )}
               </div>
               <div className="min-w-0">
                 <div className="text-sm font-semibold text-white truncate">{user.name}</div>
