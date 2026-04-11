@@ -9,8 +9,12 @@ export default function CompleteProfile() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const params = new URLSearchParams(window.location.search);
-  const tempToken = params.get("token") ?? "";
+  // auth.tsx stashes the temp token into sessionStorage so it survives URL cleanup.
+  // Fall back to reading the URL directly in case the page was loaded without auth.tsx running first.
+  const tempToken =
+    sessionStorage.getItem("shuttle_temp_token") ||
+    new URLSearchParams(window.location.search).get("token") ||
+    "";
 
   const [name, setName]         = useState("");
   const [phone, setPhone]       = useState("");
@@ -59,6 +63,7 @@ export default function CompleteProfile() {
         throw new Error(data.error ?? "Failed to complete profile setup.");
       }
 
+      sessionStorage.removeItem("shuttle_temp_token");
       setToken(data.token);
       toast({ title: "Welcome to 42 Shuttle!", description: "Your profile is set up. Enjoy your rides." });
       setLocation("/dashboard");

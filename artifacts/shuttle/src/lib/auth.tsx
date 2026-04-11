@@ -27,14 +27,24 @@ function useTokenState() {
     // Prefer token from OAuth redirect URL so it's available before any query fires
     const isCompleteProfile = window.location.pathname.includes("/complete-profile");
     const urlToken = new URLSearchParams(window.location.search).get("token");
-    if (urlToken && !isCompleteProfile) {
+
+    if (isCompleteProfile) {
+      // If there's a temp token in the URL, stash it in sessionStorage for the
+      // complete-profile page to pick up, then clean the URL.  Either way, do
+      // NOT treat it as an auth token — just return null so /api/auth/me is
+      // never called with a temp token.
+      if (urlToken) {
+        sessionStorage.setItem("shuttle_temp_token", urlToken);
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+      return null;
+    }
+
+    if (urlToken) {
       localStorage.setItem("shuttle_token", urlToken);
       window.history.replaceState({}, "", window.location.pathname);
       setAuthTokenGetter(() => urlToken);
       return urlToken;
-    }
-    if (isCompleteProfile) {
-      return null;
     }
     const stored = localStorage.getItem("shuttle_token");
     if (stored) setAuthTokenGetter(() => stored);
