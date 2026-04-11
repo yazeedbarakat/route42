@@ -4,6 +4,7 @@ import { db, usersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { LoginBody, RegisterBody, DriverLoginBody, AddDriverBody } from "@workspace/api-zod";
 import { signToken, requireAuth, requireRole } from "../lib/auth";
+import { findTestAccount, getTestAccountById } from "../lib/test-accounts";
 
 const router: IRouter = Router();
 
@@ -73,6 +74,38 @@ router.post("/auth/driver-login", async (req, res): Promise<void> => {
       email: user.email,
       role: user.role,
       createdAt: user.createdAt.toISOString(),
+    },
+    token,
+  });
+});
+
+// ─── TEST-ONLY: Hardcoded student quick-login ─────────────────────────────────
+// Accepts { username, password } and matches against the TEST_ACCOUNTS table.
+// Returns a JWT identical in shape to the real login response so the client
+// treats it as a normal session. Delete this route + test-accounts.ts when
+// replacing with a real auth system.
+router.post("/auth/test-login", async (req, res): Promise<void> => {
+  const { username, password } = req.body ?? {};
+
+  if (typeof username !== "string" || typeof password !== "string") {
+    res.status(400).json({ error: "username and password are required." });
+    return;
+  }
+
+  const account = findTestAccount(username.trim(), password.trim());
+  if (!account) {
+    res.status(401).json({ error: "Invalid test credentials." });
+    return;
+  }
+
+  const token = signToken({ userId: account.id, role: "student", email: account.email });
+  res.json({
+    user: {
+      id: account.id,
+      name: account.name,
+      email: account.email,
+      role: "student",
+      createdAt: new Date().toISOString(),
     },
     token,
   });
@@ -239,7 +272,26 @@ router.post("/auth/logout", (_req, res): Promise<void> => {
 });
 
 router.get("/auth/me", requireAuth, async (req, res): Promise<void> => {
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.user!.userId));
+  const userId = req.user!.userId;
+
+  // TEST-ONLY: negative IDs belong to hardcoded test accounts — skip DB lookup.
+  if (userId < 0) {
+    const account = getTestAccountById(userId);
+    if (!account) {
+      res.status(401).json({ error: "Test account not found" });
+      return;
+    }
+    res.json({
+      id: account.id,
+      name: account.name,
+      email: account.email,
+      role: "student",
+      createdAt: new Date().toISOString(),
+    });
+    return;
+  }
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
   if (!user) {
     res.status(401).json({ error: "User not found" });
     return;
