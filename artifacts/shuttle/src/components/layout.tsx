@@ -4,7 +4,7 @@ import { useGetNotifications } from "@workspace/api-client-react";
 import { 
   LayoutDashboard, CalendarPlus, History, Map, 
   BookOpen, Truck, Bell, LogOut, 
-  ChevronRight, Menu, X, UsersRound
+  ChevronRight, Menu, X, UsersRound, MapPin
 } from "lucide-react";
 
 import { useState } from "react";
@@ -38,6 +38,7 @@ const NAV_LINKS = {
     { href: "/admin", label: "Overview", icon: LayoutDashboard },
     { href: "/admin/bookings", label: "All Bookings", icon: BookOpen },
     { href: "/admin/drivers", label: "Driver Management", icon: UsersRound },
+    { href: "/admin/terminals", label: "Pickup Terminals", icon: MapPin },
   ],
   driver: [
     { href: "/driver", label: "My Trips", icon: Truck },

@@ -378,6 +378,54 @@ router.get("/pickup-points", requireAuth, async (_req, res): Promise<void> => {
   res.json(points);
 });
 
+router.post("/admin/pickup-points", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+  const { name, lat, lng } = req.body;
+  const cleanName = typeof name === "string" ? name.trim() : "";
+  const parsedLat = Number(lat);
+  const parsedLng = Number(lng);
+
+  // Validate coordinates server-side so only usable map pins become official terminals.
+  if (!cleanName || !Number.isFinite(parsedLat) || !Number.isFinite(parsedLng)) {
+    res.status(400).json({ error: "Name, latitude, and longitude are required." });
+    return;
+  }
+
+  // New terminals are appended to the existing route order for predictable marker ordering.
+  const existing = await db.select().from(pickupPointsTable);
+  const nextRouteOrder = existing.reduce((max, point) => Math.max(max, point.routeOrder), 0) + 1;
+
+  const [point] = await db
+    .insert(pickupPointsTable)
+    .values({
+      name: cleanName,
+      lat: parsedLat,
+      lng: parsedLng,
+      routeOrder: nextRouteOrder,
+    })
+    .returning();
+
+  res.status(201).json(point);
+});
+
+router.delete("/admin/pickup-points/:id", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+
+  // Reject invalid IDs before touching the database.
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid pickup terminal ID." });
+    return;
+  }
+
+  const [point] = await db.select().from(pickupPointsTable).where(eq(pickupPointsTable.id, id));
+  if (!point) {
+    res.status(404).json({ error: "Pickup terminal not found." });
+    return;
+  }
+
+  await db.delete(pickupPointsTable).where(eq(pickupPointsTable.id, id));
+  res.json({ success: true });
+});
+
 function getTomorrow(): string {
   const d = new Date();
   d.setDate(d.getDate() + 1);

@@ -1,6 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
-import { db, usersTable } from "@workspace/db";
+import { db, pickupPointsTable, usersTable } from "@workspace/db";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 
@@ -120,6 +120,21 @@ app.listen(port, async (err) => {
         })
         .where(eq(usersTable.id, legacyStudent.id));
     }
+
+    const defaultPickupTerminals = [
+      { name: "Northern Terminal", lat: 32.568219717501016, lng: 35.85560315169505, routeOrder: 1 },
+      { name: "Al-Ghour Terminal", lat: 32.5510273259837, lng: 35.838026446580656, routeOrder: 2 },
+      { name: "Sheikh Khalil", lat: 32.55034219324052, lng: 35.85550052285881, routeOrder: 3 },
+      { name: "Amman Terminal", lat: 32.535047165765235, lng: 35.869768897719915, routeOrder: 4 },
+      { name: "دوار الدرة", lat: 32.55824371537429, lng: 35.87344062736422, routeOrder: 5 },
+    ];
+
+    const existingPickupTerminals = await db.select().from(pickupPointsTable);
+    if (existingPickupTerminals.length === 0) {
+      // Seed official pickup terminals so maps are database-backed immediately after a remix/reset.
+      await db.insert(pickupPointsTable).values(defaultPickupTerminals);
+    }
+
     logger.info("Demo credentials are ready");
   } catch (seedErr) {
     logger.warn({ seedErr }, "Demo credential seed skipped (non-fatal)");

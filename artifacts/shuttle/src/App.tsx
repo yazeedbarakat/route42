@@ -14,6 +14,7 @@ import MapPage from "@/pages/map";
 import AdminDashboard from "@/pages/admin-dashboard";
 import AdminBookings from "@/pages/admin-bookings";
 import AdminDriverManagement from "@/pages/admin-driver-management";
+import AdminPickupTerminals from "@/pages/admin-pickup-terminals";
 import DriverDashboard from "@/pages/driver";
 import Notifications from "@/pages/notifications";
 
@@ -30,6 +31,7 @@ function Router() {
         <Route path="/map" component={MapPage} />
         <Route path="/admin/bookings" component={AdminBookings} />
         <Route path="/admin/drivers" component={AdminDriverManagement} />
+        <Route path="/admin/terminals" component={AdminPickupTerminals} />
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/driver" component={DriverDashboard} />
         <Route path="/notifications" component={Notifications} />

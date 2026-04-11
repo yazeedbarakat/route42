@@ -60,6 +60,7 @@ function fixedPickupToRouteStop(passenger: Passenger, pickupPoints: PickupPoint[
 
   const normalizedPickup = (passenger.pickupName ?? "").toLowerCase();
   const pickupPoint = pickupPoints.find(p => normalizedPickup.includes(p.name.toLowerCase()));
+  // Fixed passenger stops resolve through DB-managed official terminals first.
   const terminal = pickupPoint ?? TERMINALS.find(t =>
     normalizedPickup.includes(t.name.toLowerCase()) ||
     normalizedPickup.includes(t.nameAr.toLowerCase())

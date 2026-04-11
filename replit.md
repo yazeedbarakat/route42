@@ -60,6 +60,10 @@ The Driver Dashboard `Start Trip` action opens `/map` with the selected trip id/
 
 Admins can manage driver accounts at `/admin/drivers`. The page lists all drivers, registers new drivers with name/phone/Driver ID, and deletes driver accounts through admin-only API routes.
 
+## Admin Pickup Terminal Management
+
+Admins can manage official pickup terminals at `/admin/terminals`. The page supports searching locations through OpenStreetMap/Nominatim, clicking the Leaflet map to drop a pin, saving the terminal to `pickup_points`, and deleting saved terminals. Student and driver maps fetch these database terminals and display them as official markers.
+
 ## Key Commands
 
 - `pnpm run typecheck` — full typecheck across all packages

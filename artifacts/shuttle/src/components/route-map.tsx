@@ -9,11 +9,12 @@
  *                              clustered markers, light theme, auto-fitBounds, no click handler
  *                              animateRoute=true → progressive bus animation + "next stop" callbacks
  */
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, Polyline, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import { Loader2, CheckCircle, AlertTriangle } from "lucide-react";
+import { useGetPickupPoints, type PickupPoint } from "@workspace/api-client-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface CustomBooking {
@@ -71,17 +72,27 @@ export const TERMINALS = [
 
 export const DESTINATION = { name: "42 Irbid", lat: 32.50422734122801, lng: 35.8711883498439 };
 
-const ALL_WAYPOINTS = [
-  ...TERMINALS.map(t => `${t.lng},${t.lat}`),
-  `${DESTINATION.lng},${DESTINATION.lat}`,
-].join(";");
-
-const OSRM_TRIP_URL =
-  `https://router.project-osrm.org/trip/v1/driving/${ALL_WAYPOINTS}` +
-  `?roundtrip=false&source=first&destination=last&geometries=geojson&overview=full`;
-
 const FALLBACK: [number, number][] = TERMINALS.map(t => [t.lat, t.lng] as [number, number])
   .concat([[DESTINATION.lat, DESTINATION.lng]]);
+
+type TerminalPoint = {
+  id: number;
+  name: string;
+  nameAr?: string;
+  lat: number;
+  lng: number;
+  routeOrder: number;
+};
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[char] ?? char));
+}
 
 // ─── Driver routing helpers ────────────────────────────────────────────────────
 function straightLineDist(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -398,11 +409,13 @@ function TerminalMarkers({
   stopIndices,
   totalSteps,
   onTerminalClick,
+  terminals,
 }: {
   busIdx: number;
   stopIndices: number[];
   totalSteps: number;
   onTerminalClick?: (coords: [number, number]) => void;
+  terminals: TerminalPoint[];
 }) {
   const map = useMap();
   const refs = useRef<L.Marker[]>([]);
@@ -420,13 +433,15 @@ function TerminalMarkers({
     refs.current.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
     refs.current = [];
 
-    TERMINALS.forEach((t, i) => {
+    terminals.forEach((t, i) => {
       const m = L.marker([t.lat, t.lng], { icon: cyanMarkerIcon(), zIndexOffset: 500 }).addTo(map);
-      m.bindTooltip(t.nameAr, { direction: "top", offset: [0, -12], className: "rm-tooltip" });
+      const displayName = escapeHtml(t.name);
+      const secondaryName = escapeHtml(t.nameAr ?? "Official pickup terminal");
+      m.bindTooltip(t.nameAr ?? t.name, { direction: "top", offset: [0, -12], className: "rm-tooltip" });
       m.bindPopup(
         `<div style="font-family:Inter,sans-serif;background:#0f1420;border:1px solid rgba(34,211,238,.3);border-radius:12px;padding:12px 16px;min-width:160px;">
-          <div style="color:#22d3ee;font-weight:700;font-size:14px;margin-bottom:4px;">${t.name}</div>
-          <div style="color:#a7b0c0;font-size:11px;margin-bottom:8px;">${t.nameAr}</div>
+          <div style="color:#22d3ee;font-weight:700;font-size:14px;margin-bottom:4px;">${displayName}</div>
+          <div style="color:#a7b0c0;font-size:11px;margin-bottom:8px;">${secondaryName}</div>
           <div style="color:#fff;font-size:12px;">⏱ ETA: <strong style="color:#ff2e88">${eta(i)} min</strong></div>
           ${onClickRef.current ? '<div style="color:#22d3ee;font-size:11px;margin-top:8px;">📍 Click to select as pickup</div>' : ''}
         </div>`,
@@ -447,7 +462,7 @@ function TerminalMarkers({
     refs.current.push(dm);
 
     return () => { refs.current.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); }); };
-  }, [map, busIdx, eta]);
+  }, [map, busIdx, eta, terminals]);
 
   return null;
 }
@@ -605,9 +620,34 @@ export function RouteMap({
   onDriverProgress,
 }: RouteMapProps) {
   const isDriver = userRole === "driver";
+  const { data: pickupPoints = [] } = useGetPickupPoints({
+    query: {
+      staleTime: 30_000,
+    },
+  });
+
+  const terminals = useMemo<TerminalPoint[]>(() => {
+    // Prefer database terminals; keep hardcoded defaults only as a safe first-load fallback.
+    if (pickupPoints.length === 0) {
+      return TERMINALS.map((terminal) => ({ ...terminal, routeOrder: terminal.id }));
+    }
+
+    return pickupPoints
+      .map((point: PickupPoint) => ({
+        id: point.id,
+        name: point.name,
+        lat: Number(point.lat),
+        lng: Number(point.lng),
+        routeOrder: point.routeOrder,
+      }))
+      .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
+      .sort((a, b) => a.routeOrder - b.routeOrder);
+  }, [pickupPoints]);
+
+  const terminalKey = terminals.map(t => `${t.id}:${t.lat.toFixed(5)},${t.lng.toFixed(5)}`).join("|");
 
   const [routePoints, setRoutePoints] = useState<[number, number][]>([]);
-  const [stopIndices, setStopIndices] = useState<number[]>(TERMINALS.map(() => 0));
+  const [stopIndices, setStopIndices] = useState<number[]>(terminals.map(() => 0));
   const [loading, setLoading]         = useState(true);
   const [busIdx, setBusIdx]           = useState(0);
   const [etaTick, setEtaTick]         = useState(0);
@@ -653,8 +693,18 @@ export function RouteMap({
         [DESTINATION.lat, DESTINATION.lng],
       ];
     } else {
-      url = OSRM_TRIP_URL;
-      fallbackPts = FALLBACK;
+      const terminalWaypoints = terminals.length > 0 ? terminals : TERMINALS.map((terminal) => ({ ...terminal, routeOrder: terminal.id }));
+      const allWaypoints = [
+        ...terminalWaypoints.map(t => `${t.lng},${t.lat}`),
+        `${DESTINATION.lng},${DESTINATION.lat}`,
+      ].join(";");
+
+      // Student/admin route maps are rebuilt from official pickup terminals fetched from the DB.
+      url =
+        `https://router.project-osrm.org/trip/v1/driving/${allWaypoints}` +
+        `?roundtrip=false&source=first&destination=last&geometries=geojson&overview=full`;
+      fallbackPts = terminalWaypoints.map(t => [t.lat, t.lng] as [number, number])
+        .concat([[DESTINATION.lat, DESTINATION.lng]]);
     }
 
     setLoading(true);
@@ -670,20 +720,20 @@ export function RouteMap({
         );
         const pts = interp(raw, 3);
         setRoutePoints(pts);
-        if (!isDriver) setStopIndices(TERMINALS.map(t => closestIdx(t.lat, t.lng, pts)));
+        if (!isDriver) setStopIndices(terminals.map(t => closestIdx(t.lat, t.lng, pts)));
         setLoading(false);
       })
       .catch(() => {
         if (cancelled) return;
-        const pts = interp(fallbackPts, 70);
+        const pts = interp(fallbackPts.length > 1 ? fallbackPts : FALLBACK, 70);
         setRoutePoints(pts);
-        if (!isDriver) setStopIndices(TERMINALS.map(t => closestIdx(t.lat, t.lng, pts)));
+        if (!isDriver) setStopIndices(terminals.map(t => closestIdx(t.lat, t.lng, pts)));
         setLoading(false);
       });
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDriver, isTripActive, JSON.stringify(customBookings?.map(b => `${b.lat.toFixed(5)},${b.lng.toFixed(5)}`))]);
+  }, [isDriver, isTripActive, terminalKey, JSON.stringify(customBookings?.map(b => `${b.lat.toFixed(5)},${b.lng.toFixed(5)}`))]);
 
   // ── Callbacks ────────────────────────────────────────────────────────────
   const handleBusMove = useCallback((idx: number) => {
@@ -789,6 +839,7 @@ export function RouteMap({
               totalSteps={routePoints.length}
               key={etaTick}
               onTerminalClick={onTerminalClick}
+              terminals={terminals}
             />
           </>
         )}
@@ -797,9 +848,10 @@ export function RouteMap({
         {isDriver && !isTripActive && (
           <TerminalMarkers
             busIdx={0}
-            stopIndices={TERMINALS.map(() => 0)}
+            stopIndices={terminals.map(() => 0)}
             totalSteps={0}
             onTerminalClick={onTerminalClick}
+            terminals={terminals}
           />
         )}
 

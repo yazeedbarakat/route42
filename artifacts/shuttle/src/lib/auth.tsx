@@ -62,6 +62,9 @@ function AuthProviderInner({ children, token, setToken }: { children: ReactNode;
     // Clear all cached query data so stale user data doesn't persist
     // after the token is removed — fixes the sign-out redirect loop.
     queryClient.clear();
+    // Clear app-local session storage in addition to the JWT token.
+    localStorage.removeItem("shuttle_token");
+    sessionStorage.clear();
     setToken(null);
   };
 
