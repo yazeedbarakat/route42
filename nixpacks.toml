@@ -1,0 +1,8 @@
+[phases.install]
+cmds = ["pnpm install --no-frozen-lockfile"]
+
+[phases.build]
+cmds = ["PORT=3000 BASE_PATH=/ pnpm --filter @workspace/shuttle run build && pnpm --filter @workspace/api-server run build"]
+
+[start]
+cmd = "node --enable-source-maps artifacts/api-server/dist/index.mjs"
