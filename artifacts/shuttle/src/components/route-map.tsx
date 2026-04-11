@@ -875,7 +875,7 @@ export function RouteMap({
   const popupCss = useLight ? POPUP_CSS_LIGHT : POPUP_CSS_DARK;
 
   return (
-    <div className="relative w-full" style={{ height, isolation: "isolate" }}>
+    <div className="relative w-full" data-map-stable style={{ height, isolation: "isolate" }}>
       <style>{popupCss}</style>
 
       {loading && (

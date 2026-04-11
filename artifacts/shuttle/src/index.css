@@ -139,6 +139,56 @@
   --sidebar-accent: 190 82% 53%;
   --sidebar-accent-foreground: 220 45% 7%;
   --sidebar-ring: 335 100% 59%;
+
+  /* ── App structural theme tokens (dark defaults) ────────────────── */
+  --app-bg:            #0a0e17;
+  --app-surface:       #090d14;
+  --app-surface-2:     #0f1623;
+  --app-surface-hover: rgba(255, 255, 255, 0.05);
+  --app-border:        rgba(255, 255, 255, 0.06);
+  --app-text:          #ffffff;
+  --app-text-muted:    #a7b0c0;
+  --app-text-hover:    #ffffff;
+  --app-input-bg:      rgba(255, 255, 255, 0.04);
+}
+
+/* ── Light Theme ───────────────────────────────────────────────────── */
+[data-theme="light"] {
+  /* Shadcn/ui CSS variable overrides */
+  --background:         210 20% 96%;
+  --foreground:         222 47% 11%;
+  --border:             220 13% 86%;
+  --card:               0 0% 100%;
+  --card-foreground:    222 47% 11%;
+  --card-border:        220 13% 90%;
+  --popover:            0 0% 100%;
+  --popover-foreground: 222 47% 11%;
+  --popover-border:     220 13% 90%;
+  --sidebar:            0 0% 100%;
+  --sidebar-foreground: 222 47% 11%;
+  --sidebar-border:     220 13% 90%;
+  --muted:              210 20% 93%;
+  --muted-foreground:   215 16% 47%;
+  --input:              220 13% 90%;
+  --ring:               335 80% 55%;
+
+  /* App structural tokens override */
+  --app-bg:            #f1f5f9;
+  --app-surface:       #ffffff;
+  --app-surface-2:     #f8fafc;
+  --app-surface-hover: rgba(0, 0, 0, 0.05);
+  --app-border:        rgba(0, 0, 0, 0.09);
+  --app-text:          #0f172a;
+  --app-text-muted:    #64748b;
+  --app-text-hover:    #0f172a;
+  --app-input-bg:      rgba(0, 0, 0, 0.03);
+
+  --elevate-1: rgba(255, 46, 136, 0.05);
+  --elevate-2: rgba(255, 46, 136, 0.10);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.08);
+  --shadow:    0 4px 16px 0 rgb(0 0 0 / 0.08);
+  --shadow-md: 0 8px 24px 0 rgb(0 0 0 / 0.10);
+  --shadow-lg: 0 16px 40px 0 rgb(0 0 0 / 0.12);
 }
 
 .dark {
@@ -228,6 +278,12 @@
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 46, 136, 0.4);
 }
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 46, 136, 0.5);
+}
 
 /* Status badge animations */
 @keyframes pulse-pink {
@@ -236,4 +292,57 @@
 }
 .pulse-pink {
   animation: pulse-pink 2s ease-in-out infinite;
+}
+
+/* ── Theme-aware structural utility classes ────────────────────────── */
+/* Use these on layout shell elements instead of hardcoded hex classes. */
+
+.theme-bg      { background-color: var(--app-bg); }
+.theme-surface { background-color: var(--app-surface); }
+.theme-surface-2 { background-color: var(--app-surface-2); }
+
+.theme-border-r { border-right:  1px solid var(--app-border); }
+.theme-border-b { border-bottom: 1px solid var(--app-border); }
+.theme-border-t { border-top:    1px solid var(--app-border); }
+
+.theme-text      { color: var(--app-text); }
+.theme-text-muted { color: var(--app-text-muted); }
+
+/* Nav item that adapts to theme (used in sidebar) */
+.theme-sidebar-item {
+  color: var(--app-text-muted);
+}
+.theme-sidebar-item:hover {
+  background-color: var(--app-surface-hover);
+  color: var(--app-text-hover);
+}
+
+/* Active nav item is always neon-pink — same in both themes */
+.theme-nav-active {
+  background-color: rgba(255, 46, 136, 0.15);
+  color: #ff2e88;
+  border: 1px solid rgba(255, 46, 136, 0.20);
+}
+
+/* ── Map isolation ─────────────────────────────────────────────────── */
+/*
+ * Leaflet map containers must NEVER inherit theme background or text
+ * colours. The maps control their own tile layer (light/dark) per the
+ * userRole prop and must stay stable across global theme switches.
+ */
+.leaflet-container,
+.leaflet-pane,
+.leaflet-tile-pane,
+.leaflet-map-pane {
+  /* Prevent CSS custom property inheritance from ancestor theme tokens */
+  background-color: revert !important;
+  color: revert !important;
+}
+
+/* The wrapper div around every RouteMap already has isolation:isolate
+ * (set inline). This rule ensures the theme data-attribute never bleeds
+ * colour through any parent that wraps the map. */
+[data-map-stable] {
+  isolation: isolate;
+  color-scheme: light dark; /* browsers manage their own scrollbar inside */
 }
