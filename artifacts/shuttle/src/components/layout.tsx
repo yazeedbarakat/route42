@@ -60,7 +60,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const handleLogout = () => {
     logout();
-    setLocation("/");
+    setLocation("/login");
   };
 
   if (!user) return <>{children}</>;

@@ -110,6 +110,37 @@ app.listen(port, async (err) => {
       }
     }
 
+    // Seed 15 mock student accounts (s1–s15) for full-capacity testing.
+    for (let i = 1; i <= 15; i++) {
+      const username = `s${i}`;
+      const password = `s${i}`;
+      const passwordHash = await bcrypt.hash(password, 10);
+      const email = `${username}@students.42.tech`;
+
+      const [existing] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.username, username));
+
+      if (existing) {
+        await db
+          .update(usersTable)
+          .set({ name: `Student ${i}`, email, passwordHash, role: "student" })
+          .where(eq(usersTable.id, existing.id));
+      } else {
+        await db.insert(usersTable).values({
+          name: `Student ${i}`,
+          email,
+          passwordHash,
+          role: "student",
+          phone: null,
+          driverId: null,
+          username,
+          profileComplete: true,
+        });
+      }
+    }
+
     const [legacyStudent] = await db
       .select()
       .from(usersTable)
