@@ -94,7 +94,7 @@ export default function CompleteProfile() {
         {/* Card */}
         <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-6 shadow-xl backdrop-blur-sm">
           <p className="text-sm text-[#a7b0c0] mb-6">
-            Your 42 Google account was verified. Please provide the details below to finish setting up your shuttle account.
+            Your Google account was verified. Please provide the details below to finish setting up your shuttle account.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">

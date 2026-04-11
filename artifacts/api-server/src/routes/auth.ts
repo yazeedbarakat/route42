@@ -9,7 +9,7 @@ import { z } from "zod";
 
 const router: IRouter = Router();
 
-const STUDENT_DOMAIN = "@learner.42.tech";
+const STUDENT_DOMAIN = "";
 
 // ─── Google OAuth helpers ─────────────────────────────────────────────────────
 
@@ -282,9 +282,8 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
-  // Students must use the @learner.42.tech domain
-  if (role === "student" && !email.endsWith(STUDENT_DOMAIN)) {
-    res.status(400).json({ error: `Unauthorized Domain. Please use your 42 email.` });
+  if (STUDENT_DOMAIN && role === "student" && !email.endsWith(STUDENT_DOMAIN)) {
+    res.status(400).json({ error: `Unauthorized Domain.` });
     return;
   }
 
