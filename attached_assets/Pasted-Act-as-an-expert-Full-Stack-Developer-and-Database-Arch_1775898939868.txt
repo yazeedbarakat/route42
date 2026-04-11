@@ -1,0 +1,186 @@
+Act as an expert Full-Stack Developer and Database Architect.
+
+I need you to fix the Admin Dashboard (`SystemOverview`) in my "Smart Shuttle Solution" so that it displays only real, database-driven analytics, with strict role-based access control (RBAC), consistent counts, and seamless live updates.
+
+==================================================
+MAIN GOAL
+==================================================
+- Remove all mock or hardcoded analytics data.
+- Make every dashboard metric come from live database queries.
+- Ensure data consistency between Users, Bookings, and Trips.
+- Enforce secure RBAC at the backend.
+- Keep the dashboard updating automatically without manual refresh.
+
+==================================================
+ASSUMED DATA MODEL
+==================================================
+Use these entities and relationships unless the codebase already defines them differently:
+
+- User:
+  { id, name, role: "admin" | "driver" | "student" }
+
+- Booking:
+  { id, userId, tripId, pickupType, status, createdAt }
+
+- Trip:
+  { id, driverId, scheduledAt, status, capacity, createdAt }
+
+Relationships:
+- Booking belongs to User
+- Booking belongs to Trip
+- Trip belongs to Driver (User with role = "driver")
+
+==================================================
+TASK 1: BACKEND AGGREGATION ENDPOINT
+==================================================
+Create or update:
+GET /api/admin/dashboard-stats
+
+Requirements:
+- Remove all mock data.
+- Compute all values directly from the database.
+- Use efficient queries and avoid N+1 problems.
+
+Return these 8 metrics:
+
+1. totalStudents
+   - Count all users where role = "student"
+
+2. bookingsToday
+   - Count all bookings created today
+   - Compare using the server’s current date in YYYY-MM-DD format
+
+3. confirmedTrips
+   - Count trips scheduled for today where status = "confirmed"
+
+4. pendingTrips
+   - Count trips scheduled for today where status = "pending"
+
+5. tripsThisWeek
+   - Count trips scheduled within the current week
+   - Use scheduledAt, not createdAt
+
+6. avgOccupancy
+   - Formula:
+     (bookingsToday / totalSeatsToday) * 100
+   - totalSeatsToday = sum of capacity for all trips scheduled today
+   - Return 0 if denominator is 0
+
+7. peakTime
+   - Group today’s bookings by trip time slot
+   - Return the time slot with the highest number of bookings
+   - If no bookings exist, return null
+
+8. efficiency
+   - Formula:
+     (filledSeatsConfirmedToday / totalCapacityConfirmedToday) * 100
+   - Return 0 if denominator is 0
+
+==================================================
+EXPECTED RESPONSE SHAPE
+==================================================
+{
+  "totalStudents": number,
+  "bookingsToday": number,
+  "confirmedTrips": number,
+  "pendingTrips": number,
+  "tripsThisWeek": number,
+  "avgOccupancy": number,
+  "peakTime": string | null,
+  "efficiency": number
+}
+
+==================================================
+TASK 2: STRICT RBAC ENFORCEMENT
+==================================================
+Do NOT trust any role sent from the frontend.
+
+Enforce access using the authenticated user from the server session/JWT.
+
+Rules:
+
+- Admin:
+  - Full access to analytics
+  - Can access /api/admin/dashboard-stats
+
+- Driver:
+  - Can only access trips assigned to that driver
+  - Can only access bookings linked to those trips
+  - Must never access admin analytics
+
+- Student:
+  - Can only access their own bookings
+  - Must never access admin analytics or other users’ data
+
+Implement RBAC at:
+- Route/middleware level
+- Query/service level
+
+==================================================
+TASK 3: NEXT.JS CACHE CONTROL
+==================================================
+Ensure the stats are always fresh.
+
+If using Next.js App Router:
+- Add:
+  export const dynamic = "force-dynamic"
+
+Or set:
+- Cache-Control: no-store
+
+The endpoint must not serve stale cached dashboard stats.
+
+==================================================
+TASK 4: FRONTEND SYSTEMOVERVIEW INTEGRATION
+==================================================
+Update `SystemOverview.jsx` so the 8 stat cards read from /api/admin/dashboard-stats.
+
+Map the API fields to the cards:
+- totalStudents
+- bookingsToday
+- confirmedTrips
+- pendingTrips
+- tripsThisWeek
+- avgOccupancy
+- peakTime
+- efficiency
+
+UI requirements:
+- Keep the current dashboard design unchanged
+- Show percentages in a clean format like "42%"
+- Show peakTime in a readable time format like "10:00 AM"
+- Implement silent polling every 5 seconds
+- Use SWR `refreshInterval: 5000` or React Query `refetchInterval: 5000`
+- Do not show loading spinners during polling
+- Do not flicker or reset the cards while refreshing
+- Keep stale data visible until new data is ready
+
+==================================================
+EDGE CASES
+==================================================
+Handle these safely:
+- No bookings today
+- No trips today
+- Division by zero
+- Null peakTime
+- Empty database
+- Mixed status values
+
+==================================================
+DELIVERABLES
+==================================================
+Provide:
+1. Backend controller for /api/admin/dashboard-stats
+2. RBAC middleware or secure query/service layer
+3. Efficient aggregation logic
+4. Updated SystemOverview.jsx with live polling and clean mapping
+5. Production-ready code only
+
+==================================================
+IMPORTANT
+==================================================
+- Prioritize correctness over guessing.
+- Keep queries efficient.
+- Avoid redundant database calls.
+- Keep the existing dark theme and layout exactly as they are.
+- Make the solution scalable and secure.

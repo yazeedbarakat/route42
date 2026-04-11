@@ -173,12 +173,14 @@ export interface DriverTrip {
 }
 
 export interface DashboardStats {
-  totalBookingsToday: number;
-  confirmedTripsToday: number;
-  pendingTripsToday: number;
   totalStudents: number;
-  totalTripsThisWeek: number;
-  averageOccupancyRate: number;
+  bookingsToday: number;
+  confirmedTrips: number;
+  pendingTrips: number;
+  tripsThisWeek: number;
+  avgOccupancy: number;
+  peakTime: string | null;
+  efficiency: number;
 }
 
 export interface TripDemand {

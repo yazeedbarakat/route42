@@ -161,13 +161,6 @@ export default function AdminDashboard() {
 
   const allTrips = demand ?? [];
   const tripsWithDemand = allTrips.filter(trip => trip.bookingCount > 0);
-  const peakTrip = tripsWithDemand.reduce<typeof tripsWithDemand[number] | null>(
-    (peak, trip) => (!peak || trip.bookingCount > peak.bookingCount ? trip : peak),
-    null,
-  );
-  const totalBookedSeats = tripsWithDemand.reduce((sum, trip) => sum + trip.bookingCount, 0);
-  const totalSeats = tripsWithDemand.reduce((sum, trip) => sum + trip.bookingCount + trip.availableSeats, 0);
-  const efficiency = totalSeats > 0 ? Math.round((totalBookedSeats / totalSeats) * 100) : 0;
   const totalCustomPickups = hotspots.reduce((sum, h) => sum + h.totalUsage, 0);
 
   return (
@@ -199,19 +192,14 @@ export default function AdminDashboard() {
 
       {/* ── Stats grid — all 8 cards clickable ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Students"  value={stats?.totalStudents}             icon={Users}         color="cyan"    loading={statsLoading} onClick={() => setActiveCard("totalStudents")}  />
-        <StatCard label="Bookings Today"  value={stats?.totalBookingsToday}         icon={CalendarCheck} color="pink"    loading={statsLoading} onClick={() => setActiveCard("bookingsToday")}  />
-        <StatCard label="Confirmed Trips" value={stats?.confirmedTripsToday}        icon={CheckCircle2}  color="emerald" loading={statsLoading} onClick={() => setActiveCard("confirmedTrips")} />
-        <StatCard label="Pending Trips"   value={stats?.pendingTripsToday}          icon={Clock}         color="amber"   loading={statsLoading} onClick={() => setActiveCard("pendingTrips")}   />
-        <StatCard label="Trips This Week" value={stats?.totalTripsThisWeek}         icon={BarChart3}     color="purple"  loading={statsLoading} onClick={() => setActiveCard("tripsThisWeek")}  />
-        <StatCard
-          label="Avg Occupancy"
-          value={stats?.averageOccupancyRate !== undefined ? `${stats.averageOccupancyRate}%` : undefined}
-          icon={TrendingUp} color="blue" loading={statsLoading}
-          onClick={() => setActiveCard("avgOccupancy")}
-        />
-        <StatCard label="Peak Time"  value={peakTrip ? peakTrip.departureTime : "—"} icon={Clock}      color="amber"   loading={demandLoading} onClick={() => setActiveCard("peakTime")}   />
-        <StatCard label="Efficiency" value={`${efficiency}%`}                         icon={TrendingUp} color="emerald" loading={demandLoading} onClick={() => setActiveCard("efficiency")} />
+        <StatCard label="Total Students"  value={stats?.totalStudents}                                                   icon={Users}         color="cyan"    loading={statsLoading} onClick={() => setActiveCard("totalStudents")}  />
+        <StatCard label="Bookings Today"  value={stats?.bookingsToday}                                                     icon={CalendarCheck} color="pink"    loading={statsLoading} onClick={() => setActiveCard("bookingsToday")}  />
+        <StatCard label="Confirmed Trips" value={stats?.confirmedTrips}                                                    icon={CheckCircle2}  color="emerald" loading={statsLoading} onClick={() => setActiveCard("confirmedTrips")} />
+        <StatCard label="Pending Trips"   value={stats?.pendingTrips}                                                      icon={Clock}         color="amber"   loading={statsLoading} onClick={() => setActiveCard("pendingTrips")}   />
+        <StatCard label="Trips This Week" value={stats?.tripsThisWeek}                                                     icon={BarChart3}     color="purple"  loading={statsLoading} onClick={() => setActiveCard("tripsThisWeek")}  />
+        <StatCard label="Avg Occupancy"   value={stats?.avgOccupancy !== undefined ? `${stats.avgOccupancy}%` : undefined} icon={TrendingUp}    color="blue"    loading={statsLoading} onClick={() => setActiveCard("avgOccupancy")}  />
+        <StatCard label="Peak Time"       value={stats?.peakTime ?? "—"}                                                   icon={Clock}         color="amber"   loading={statsLoading} onClick={() => setActiveCard("peakTime")}      />
+        <StatCard label="Efficiency"      value={stats?.efficiency !== undefined ? `${stats.efficiency}%` : undefined}     icon={TrendingUp}    color="emerald" loading={statsLoading} onClick={() => setActiveCard("efficiency")}    />
       </div>
 
       {/* ── Trip demand table ── */}
