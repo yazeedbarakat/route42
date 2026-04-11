@@ -1,0 +1,35 @@
+Act as an expert React/Next.js Full-Stack Developer. I need to build a dedicated "My Ride Info" hub for the Student panel in my "Smart Shuttle Solution".
+
+**Goal:**
+Add a new sidebar navigation button for students called "My Ride". This page will serve as their central dashboard for active trips. If they have a ride, show them everything (Live Map, ETA, Driver Info). If not, show a friendly empty state. Also, implement a push notification for when the trip starts.
+
+**Task 1: Sidebar Navigation**
+* Update the Student Sidebar. Add a new link labeled "My Ride" (with a bus or route icon) positioned prominently on the left menu.
+* Route this to a new page component: `/student/my-ride`.
+
+**Task 2: "My Ride" Page Logic & UI**
+Create the `MyRide.jsx` component. It must fetch the student's current active booking (status: `confirmed` or `in_progress`).
+
+* **State A: No Active Ride**
+  * If the student has no upcoming confirmed/in-progress bookings today, display a clean, dark-themed empty state card.
+  * Message: "You don't have any active rides at the moment. Head over to the Bookings page to reserve your seat!" with a button linking to `/student/booking`.
+
+* **State B: Active Ride Dashboard**
+  * If they have an active ride, display a comprehensive dashboard including:
+  * **1. The Live Map:** Embed the strictly *Read-Only Route Map* here (Light theme, showing the moving bus and polyline, as established previously).
+  * **2. Ride Details Card:** Show the Scheduled Time, Destination (e.g., 42 Irbid), Driver Name, and Vehicle/Plate details.
+  * **3. Live Status:** Show a dynamic badge (e.g., "Waiting for departure" or "On the way!").
+  * **4. Digital Ticket:** Show their Booking ID or a placeholder QR code for boarding.
+
+**Task 3: Backend Notification Trigger (Ride Started)**
+* Update the Driver's trip management controller (where the driver clicks "Start Trip").
+* When a trip status changes from `confirmed` to `in_progress`:
+  1. Find ALL students who have a booking for this specific trip.
+  2. Automatically generate a Notification for each of these students.
+  3. Notification Message: "Your ride has started! The bus is on its way. Check 'My Ride' for live tracking."
+
+**Constraints:**
+* Keep the styling strictly aligned with the "42 Intranet V2" dark UI theme.
+* Ensure data is fetched using `SWR` or React Query with a polling interval (e.g., `refreshInterval: 5000`) so the "My Ride" dashboard updates live without manual refreshing.
+
+Please provide the code for the new `MyRide.jsx` page, the Sidebar update, and the backend notification trigger logic for when a trip starts.

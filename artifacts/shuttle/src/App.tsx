@@ -19,6 +19,7 @@ import AdminPickupTerminals from "@/pages/admin-pickup-terminals";
 import AdminSchedule from "@/pages/admin-schedule";
 import DriverDashboard from "@/pages/driver";
 import Notifications from "@/pages/notifications";
+import MyRide from "@/pages/my-ride";
 
 const queryClient = new QueryClient();
 
@@ -31,6 +32,7 @@ function Router() {
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/book" component={Book} />
         <Route path="/history" component={History} />
+        <Route path="/my-ride" component={MyRide} />
         <Route path="/map" component={MapPage} />
         <Route path="/admin/bookings" component={AdminBookings} />
         <Route path="/admin/drivers" component={AdminDriverManagement} />

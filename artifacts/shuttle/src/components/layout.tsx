@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useGetNotifications } from "@workspace/api-client-react";
 import { 
-  LayoutDashboard, CalendarPlus, History, Map, 
+  LayoutDashboard, CalendarPlus, History, Map, Bus,
   BookOpen, Truck, Bell, LogOut, 
   ChevronRight, Menu, X, UsersRound, MapPin, CalendarClock
 } from "lucide-react";
@@ -31,6 +31,7 @@ const NAV_LINKS = {
   student: [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/book", label: "Book a Ride", icon: CalendarPlus },
+    { href: "/my-ride", label: "My Ride", icon: Bus },
     { href: "/history", label: "My Bookings", icon: History },
   ],
   admin: [

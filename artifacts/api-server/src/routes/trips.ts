@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, tripsTable, bookingsTable, pickupPointsTable, notificationsTable, usersTable } from "@workspace/db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import { GetTripsQueryParams, ConfirmTripParams, CancelTripParams } from "@workspace/api-zod";
 
@@ -344,6 +344,24 @@ router.post("/driver/trips/:id/start", requireAuth, requireRole("driver", "admin
 
   if (!trip) { res.status(404).json({ error: "Trip not found" }); return; }
 
+  // Notify all passengers on this trip that the ride has started
+  const passengerBookings = await db
+    .select({ userId: bookingsTable.userId })
+    .from(bookingsTable)
+    .where(and(
+      eq(bookingsTable.tripId, id),
+      sql`${bookingsTable.status} != 'canceled'`
+    ));
+
+  for (const booking of passengerBookings) {
+    await db.insert(notificationsTable).values({
+      userId: booking.userId,
+      message: `Your ride has started! The bus is on its way. Check 'My Ride' for live tracking.`,
+      type: "trip_started",
+      isRead: false,
+    });
+  }
+
   res.json(formatTrip(trip));
 });
 
@@ -425,6 +443,110 @@ router.get("/student/active-trip", requireAuth, async (req, res): Promise<void> 
         customLng: p.customLng ? parseFloat(p.customLng) : null,
       })),
     },
+  });
+});
+
+// ─── Student: My Ride — confirmed or in_progress booking for today ────────────
+router.get("/student/my-ride", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.user?.userId;
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const myBookings = await db
+    .select({
+      bookingId: bookingsTable.id,
+      tripId: bookingsTable.tripId,
+      bookingStatus: bookingsTable.status,
+      pickupType: bookingsTable.pickupType,
+      pickupName: bookingsTable.pickupName,
+      customLat: bookingsTable.customLat,
+      customLng: bookingsTable.customLng,
+      pickupPointId: bookingsTable.pickupPointId,
+    })
+    .from(bookingsTable)
+    .where(and(
+      eq(bookingsTable.userId, userId),
+      sql`${bookingsTable.status} != 'canceled'`
+    ));
+
+  if (myBookings.length === 0) { res.json({ status: "none" }); return; }
+
+  const tripIds = myBookings.map(b => b.tripId).filter((id): id is number => id !== null);
+
+  const todayTrips = await db
+    .select()
+    .from(tripsTable)
+    .where(and(
+      eq(tripsTable.date, today),
+      sql`${tripsTable.status} IN ('confirmed', 'in_progress')`
+    ));
+
+  const activeTrip = todayTrips.find(t => tripIds.includes(t.id));
+  if (!activeTrip) { res.json({ status: "none" }); return; }
+
+  const myBooking = myBookings.find(b => b.tripId === activeTrip.id)!;
+
+  let pickupDisplayName = myBooking.pickupName ?? null;
+  if (myBooking.pickupType === "fixed" && myBooking.pickupPointId) {
+    const [pp] = await db.select().from(pickupPointsTable).where(eq(pickupPointsTable.id, myBooking.pickupPointId));
+    if (pp) pickupDisplayName = pp.name;
+  }
+
+  const [driver] = await db
+    .select({ name: usersTable.name, driverId: usersTable.driverId, phone: usersTable.phone })
+    .from(usersTable)
+    .where(eq(usersTable.role, "driver"))
+    .limit(1);
+
+  let passengers: object[] = [];
+  if (activeTrip.status === "in_progress") {
+    const raw = await db
+      .select({
+        bookingId: bookingsTable.id,
+        studentName: usersTable.name,
+        studentEmail: usersTable.email,
+        pickupType: bookingsTable.pickupType,
+        pickupName: bookingsTable.pickupName,
+        customLat: bookingsTable.customLat,
+        customLng: bookingsTable.customLng,
+        pickupPointName: pickupPointsTable.name,
+      })
+      .from(bookingsTable)
+      .innerJoin(usersTable, eq(bookingsTable.userId, usersTable.id))
+      .leftJoin(pickupPointsTable, eq(bookingsTable.pickupPointId, pickupPointsTable.id))
+      .where(and(eq(bookingsTable.tripId, activeTrip.id), sql`${bookingsTable.status} != 'canceled'`));
+
+    passengers = raw.map(p => ({
+      bookingId: p.bookingId,
+      studentName: p.studentName,
+      studentEmail: p.studentEmail,
+      pickupType: p.pickupType,
+      pickupName: p.pickupType === "fixed" ? (p.pickupPointName ?? p.pickupName) : p.pickupName,
+      customLat: p.customLat ?? null,
+      customLng: p.customLng ?? null,
+    }));
+  }
+
+  res.json({
+    status: activeTrip.status === "in_progress" ? "in_progress" : "confirmed",
+    booking: {
+      id: myBooking.bookingId,
+      pickupType: myBooking.pickupType,
+      pickupName: pickupDisplayName,
+      customLat: myBooking.customLat ?? null,
+      customLng: myBooking.customLng ?? null,
+    },
+    trip: {
+      id: activeTrip.id,
+      date: activeTrip.date,
+      departureTime: activeTrip.departureTime,
+      direction: activeTrip.direction,
+      totalSeats: activeTrip.totalSeats,
+      bookedSeats: activeTrip.bookedSeats,
+    },
+    driver: driver ? { name: driver.name, driverId: driver.driverId, phone: driver.phone ?? null } : null,
+    passengers,
   });
 });
 
