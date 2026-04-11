@@ -467,6 +467,46 @@ router.delete(
   },
 );
 
+// ─── Student: change own password ────────────────────────────────────────────
+const ChangePasswordBody = z.object({
+  currentPassword: z.string().min(1),
+  newPassword:     z.string().min(6).max(128),
+});
+
+router.patch("/student/password", requireAuth, async (req, res): Promise<void> => {
+  const userId = req.user!.userId;
+
+  if (userId < 0) {
+    res.status(403).json({ error: "Cannot change password for test accounts." });
+    return;
+  }
+
+  const parsed = ChangePasswordBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "New password must be at least 6 characters." });
+    return;
+  }
+
+  const { currentPassword, newPassword } = parsed.data;
+
+  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+  if (!user) {
+    res.status(404).json({ error: "User not found." });
+    return;
+  }
+
+  const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!valid) {
+    res.status(401).json({ error: "Current password is incorrect." });
+    return;
+  }
+
+  const newHash = await bcrypt.hash(newPassword, 10);
+  await db.update(usersTable).set({ passwordHash: newHash }).where(eq(usersTable.id, userId));
+
+  res.json({ success: true });
+});
+
 router.post("/auth/logout", (_req, res): Promise<void> => {
   res.json({ success: true, message: "Logged out" });
   return Promise.resolve();
