@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useLocation, useSearch } from "wouter";
+import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Bus, User, Phone, Lock, ChevronRight, Loader2 } from "lucide-react";
@@ -7,10 +7,9 @@ import { Bus, User, Phone, Lock, ChevronRight, Loader2 } from "lucide-react";
 export default function CompleteProfile() {
   const { setToken } = useAuth();
   const [, setLocation] = useLocation();
-  const search = useSearch();
   const { toast } = useToast();
 
-  const params = new URLSearchParams(search);
+  const params = new URLSearchParams(window.location.search);
   const tempToken = params.get("token") ?? "";
 
   const [name, setName]         = useState("");
