@@ -5,6 +5,7 @@ import tripsRouter from "./trips";
 import bookingsRouter from "./bookings";
 import statsRouter from "./stats";
 import notificationsRouter from "./notifications";
+import customPickupsRouter from "./custom-pickups";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(tripsRouter);
 router.use(bookingsRouter);
 router.use(statsRouter);
 router.use(notificationsRouter);
+router.use(customPickupsRouter);
 
 export default router;

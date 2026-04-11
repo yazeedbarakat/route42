@@ -1,19 +1,10 @@
-import { useGetDashboardStats, useGetTripDemand, useConfirmTrip, useCancelTrip } from "@workspace/api-client-react";
+import { useGetDashboardStats, useGetTripDemand, useConfirmTrip, useCancelTrip, useGetCustomPickupsHistory } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { useLocation, Link } from "wouter";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Users, CalendarCheck, Clock, TrendingUp, CheckCircle2, AlertCircle, XCircle, ArrowRight, Loader2, BarChart3, Shield, Map } from "lucide-react";
-import { RouteMap, type CustomBooking } from "@/components/route-map";
-
-// Demo custom booking coordinates for admin visibility
-const ADMIN_CUSTOM_BOOKINGS: CustomBooking[] = [
-  { lat: 32.5592, lng: 35.8520, studentName: "Youssef Al-Ahmad"  },
-  { lat: 32.5464, lng: 35.8575, studentName: "Sara Mansour"       },
-  { lat: 32.5508, lng: 35.8465, studentName: "Omar Khalil"        },
-  { lat: 32.5385, lng: 35.8610, studentName: "Layla Hassan"       },
-  { lat: 32.5540, lng: 35.8395, studentName: "Ahmad Al-Rashidi"   },
-];
+import { RouteMap } from "@/components/route-map";
 
 function StatCard({ label, value, icon: Icon, color, loading }: {
   label: string; value: string | number | undefined; icon: any; color: string; loading: boolean;
@@ -78,6 +69,9 @@ export default function AdminDashboard() {
 
   const { data: stats, isLoading: statsLoading } = useGetDashboardStats();
   const { data: demand, isLoading: demandLoading, refetch: refetchDemand } = useGetTripDemand();
+  const { data: hotspots = [], isLoading: hotspotsLoading } = useGetCustomPickupsHistory({
+    query: { enabled: user?.role === "admin" },
+  });
   const confirmTrip = useConfirmTrip();
   const cancelTrip  = useCancelTrip();
 
@@ -112,6 +106,8 @@ export default function AdminDashboard() {
   const totalBookedSeats = tripsWithDemand.reduce((sum, trip) => sum + trip.bookingCount, 0);
   const totalSeats = tripsWithDemand.reduce((sum, trip) => sum + trip.bookingCount + trip.availableSeats, 0);
   const efficiency = totalSeats > 0 ? Math.round((totalBookedSeats / totalSeats) * 100) : 0;
+
+  const totalCustomPickups = hotspots.reduce((sum, h) => sum + h.totalUsage, 0);
 
   return (
     <div className="space-y-6">
@@ -251,50 +247,86 @@ export default function AdminDashboard() {
             </div>
             <div className="text-left">
               <p className="font-semibold text-white text-sm">Custom Pickup Map</p>
-              <p className="text-xs text-[#a7b0c0]">{ADMIN_CUSTOM_BOOKINGS.length} students have on-route custom pickups today</p>
+              <p className="text-xs text-[#a7b0c0]">
+                {hotspotsLoading
+                  ? "Loading analytics data…"
+                  : `${hotspots.length} hotspot${hotspots.length !== 1 ? "s" : ""} · ${totalCustomPickups} total custom pickups`}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-[#fb923c] bg-[#fb923c]/10 border border-[#fb923c]/20 px-2.5 py-1 rounded-full font-medium">
-              {ADMIN_CUSTOM_BOOKINGS.length} pickups
-            </span>
+            {hotspotsLoading ? (
+              <Loader2 size={14} className="animate-spin text-[#fb923c]" />
+            ) : (
+              <span className="text-xs text-[#fb923c] bg-[#fb923c]/10 border border-[#fb923c]/20 px-2.5 py-1 rounded-full font-medium">
+                {hotspots.length} hotspot{hotspots.length !== 1 ? "s" : ""}
+              </span>
+            )}
             <span className="text-[#a7b0c0] text-sm">{showCustomMap ? "▲" : "▼"}</span>
           </div>
         </button>
 
         {showCustomMap && (
           <>
-            {/* Passenger summary */}
-            <div className="border-t border-white/[0.06] px-5 py-4">
-              <p className="text-xs font-semibold text-[#a7b0c0] uppercase tracking-wider mb-3">Students with Custom Pickups</p>
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
-                {ADMIN_CUSTOM_BOOKINGS.map((b, i) => (
-                  <div key={i} className="flex items-center gap-2 p-3 rounded-lg bg-[#fb923c]/[0.06] border border-[#fb923c]/15">
-                    <div className="w-2 h-2 rounded-full bg-[#fb923c] shadow-[0_0_6px_rgba(251,146,60,0.8)] shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-white leading-tight truncate">{b.studentName}</p>
-                      <p className="text-[10px] font-mono text-[#a7b0c0]">{b.lat.toFixed(4)}, {b.lng.toFixed(4)}</p>
-                    </div>
-                  </div>
-                ))}
+            {hotspotsLoading ? (
+              <div className="border-t border-white/[0.06] flex items-center gap-3 px-5 py-8">
+                <Loader2 size={18} className="animate-spin text-[#fb923c]" />
+                <span className="text-[#a7b0c0] text-sm">Aggregating pickup data…</span>
               </div>
-            </div>
+            ) : hotspots.length === 0 ? (
+              <div className="border-t border-white/[0.06] text-center py-12 text-[#a7b0c0] text-sm">
+                No custom pickup bookings found in the database yet.
+              </div>
+            ) : (
+              <>
+                {/* Hotspot summary */}
+                <div className="border-t border-white/[0.06] px-5 py-4">
+                  <p className="text-xs font-semibold text-[#a7b0c0] uppercase tracking-wider mb-3">
+                    Pickup Hotspots · 50m Radius Clusters
+                  </p>
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+                    {hotspots.map((h, i) => (
+                      <div key={i} className="flex items-center gap-2 p-3 rounded-lg bg-[#fb923c]/[0.06] border border-[#fb923c]/15">
+                        <div
+                          className="shrink-0 rounded-full bg-[#fb923c] flex items-center justify-center font-bold text-white text-[10px]"
+                          style={{
+                            width: `${Math.round(18 + (h.totalUsage / Math.max(...hotspots.map(x => x.totalUsage), 1)) * 12)}px`,
+                            height: `${Math.round(18 + (h.totalUsage / Math.max(...hotspots.map(x => x.totalUsage), 1)) * 12)}px`,
+                            boxShadow: "0 0 8px rgba(251,146,60,0.7)",
+                          }}
+                        >
+                          {h.totalUsage}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-white leading-tight">
+                            {h.totalUsage} pickup{h.totalUsage !== 1 ? "s" : ""}
+                          </p>
+                          <p className="text-[10px] font-mono text-[#a7b0c0] truncate">
+                            {h.coordinates.lat.toFixed(4)}, {h.coordinates.lng.toFixed(4)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
-            {/* Map */}
-            <div className="border-t border-white/[0.06]">
-              <RouteMap
-                height="420px"
-                showBus={false}
-                customBookings={ADMIN_CUSTOM_BOOKINGS}
-              />
-            </div>
+                {/* Map */}
+                <div className="border-t border-white/[0.06]">
+                  <RouteMap
+                    height="420px"
+                    showBus={false}
+                    analyticsHotspots={hotspots}
+                  />
+                </div>
 
-            <div className="px-5 py-3 border-t border-white/[0.06] bg-[#fb923c]/[0.04] flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-[#fb923c] shadow-[0_0_6px_rgba(251,146,60,0.8)]" />
-              <p className="text-xs text-[#a7b0c0]">
-                <span className="text-[#fb923c] font-medium">Orange markers</span> = custom student-selected on-route pickups · Click for passenger name
-              </p>
-            </div>
+                <div className="px-5 py-3 border-t border-white/[0.06] bg-[#fb923c]/[0.04] flex items-center gap-3">
+                  <div className="w-2 h-2 rounded-full bg-[#fb923c] shadow-[0_0_6px_rgba(251,146,60,0.8)]" />
+                  <p className="text-xs text-[#a7b0c0]">
+                    <span className="text-[#fb923c] font-medium">Orange markers</span> = clustered pickup hotspots (50m radius) · Larger = more usage · Click for full analytics
+                  </p>
+                </div>
+              </>
+            )}
           </>
         )}
       </div>

@@ -2,8 +2,8 @@
  * Manually authored hooks for endpoints not covered by the orval-generated client.
  * These follow the same patterns as the generated hooks in generated/api.ts.
  */
-import { useMutation } from "@tanstack/react-query";
-import type { UseMutationOptions, UseMutationResult } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import type { UseMutationOptions, UseMutationResult, UseQueryOptions, UseQueryResult } from "@tanstack/react-query";
 import { customFetch } from "./custom-fetch";
 import type { ErrorType } from "./custom-fetch";
 
@@ -77,5 +77,28 @@ export const useAddDriver = <TError = ErrorType<unknown>, TContext = unknown>(op
   return useMutation<AddDriverResponse, TError, { data: AddDriverBody }, TContext>({
     mutationFn: ({ data }) => addDriver(data),
     ...options?.mutation,
+  });
+};
+
+// ─── Admin: Custom Pickups History ───────────────────────────────────────────
+
+export interface PickupHotspot {
+  coordinates: { lat: number; lng: number };
+  totalUsage: number;
+  studentsHistory: { name: string; date: string }[];
+}
+
+export const getCustomPickupsHistory = async (): Promise<PickupHotspot[]> => {
+  return customFetch<PickupHotspot[]>("/api/admin/custom-pickups-history");
+};
+
+export const useGetCustomPickupsHistory = <TError = ErrorType<unknown>>(options?: {
+  query?: UseQueryOptions<PickupHotspot[], TError>;
+}): UseQueryResult<PickupHotspot[], TError> => {
+  return useQuery<PickupHotspot[], TError>({
+    queryKey: ["admin", "custom-pickups-history"],
+    queryFn: getCustomPickupsHistory,
+    staleTime: 60_000,
+    ...options?.query,
   });
 };

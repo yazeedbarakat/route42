@@ -24,6 +24,12 @@ export interface CustomBooking {
   studentEmail?: string;
 }
 
+export interface PickupHotspot {
+  coordinates: { lat: number; lng: number };
+  totalUsage: number;
+  studentsHistory: { name: string; date: string }[];
+}
+
 export interface DriverProgressInfo {
   busIdx: number;
   totalPts: number;
@@ -41,6 +47,7 @@ export interface RouteMapProps {
   onLocationSelect?: (coords: [number, number]) => void;
   selectedCoords?: [number, number] | null;
   customBookings?: CustomBooking[];
+  analyticsHotspots?: PickupHotspot[];
   showBus?: boolean;
   onBusMoved?: (busIdx: number, totalSteps: number, stopIndices: number[]) => void;
   onTerminalClick?: (coords: [number, number]) => void;
@@ -492,6 +499,92 @@ function PickupMarker({ position }: { position: [number, number] | null }) {
   return null;
 }
 
+// ─── Child: Admin analytics hotspot markers ───────────────────────────────────
+function AdminAnalyticsLayer({ hotspots }: { hotspots: PickupHotspot[] }) {
+  const map = useMap();
+  const refs = useRef<L.Marker[]>([]);
+
+  useEffect(() => {
+    refs.current.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); });
+    refs.current = [];
+
+    if (!hotspots.length) return;
+
+    const maxUsage = Math.max(...hotspots.map(h => h.totalUsage), 1);
+
+    hotspots.forEach(hotspot => {
+      const ratio = hotspot.totalUsage / maxUsage;
+      const size = Math.round(14 + ratio * 22);
+      const opacity = 0.55 + ratio * 0.45;
+      const half = size / 2;
+      const rippleSize = size + 10;
+      const rippleHalf = rippleSize / 2;
+
+      const icon = L.divIcon({
+        className: "",
+        iconSize: [size, size],
+        iconAnchor: [half, half],
+        popupAnchor: [0, -(half + 4)],
+        html: `${RIPPLE}<div style="position:relative;width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;">
+          <div style="position:absolute;width:${rippleSize}px;height:${rippleSize}px;left:${-rippleHalf + half}px;top:${-rippleHalf + half}px;background:rgba(251,146,60,${(ratio * 0.25).toFixed(2)});border-radius:50%;animation:rm-ripple 2.4s ease-out infinite;"></div>
+          <div style="width:${size}px;height:${size}px;background:rgba(251,146,60,${opacity.toFixed(2)});border:2px solid rgba(255,255,255,0.75);border-radius:50%;box-shadow:0 0 ${Math.round(8 + ratio * 14)}px rgba(251,146,60,0.85),0 0 ${Math.round(16 + ratio * 24)}px rgba(251,146,60,0.4);display:flex;align-items:center;justify-content:center;font-size:${Math.round(8 + ratio * 5)}px;font-weight:800;color:#fff;">${hotspot.totalUsage}</div>
+        </div>`,
+      });
+
+      const studentRows = hotspot.studentsHistory
+        .slice(0, 20)
+        .map(s => {
+          const safeName = escapeHtml(s.name);
+          const safeDate = escapeHtml(s.date);
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);gap:8px;">
+            <span style="color:#e2e8f0;font-size:11px;font-weight:500;">👤 ${safeName}</span>
+            <span style="color:#64748b;font-size:10px;font-family:monospace;white-space:nowrap;">${safeDate}</span>
+          </div>`;
+        })
+        .join("");
+
+      const more = hotspot.studentsHistory.length > 20
+        ? `<div style="color:#64748b;font-size:10px;text-align:center;padding-top:4px;">+${hotspot.studentsHistory.length - 20} more</div>`
+        : "";
+
+      const popupHtml = `
+        <div style="font-family:Inter,sans-serif;background:#0d1117;border:1px solid rgba(251,146,60,0.4);border-radius:14px;padding:14px 16px;min-width:220px;max-width:280px;box-shadow:0 8px 32px rgba(0,0,0,0.6);">
+          <div style="color:#fb923c;font-weight:800;font-size:13px;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+            📍 Custom Point Analytics
+          </div>
+          <div style="background:rgba(251,146,60,0.12);border:1px solid rgba(251,146,60,0.25);border-radius:8px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+            <span style="color:#a7b0c0;font-size:11px;">Total Pickups</span>
+            <span style="color:#fb923c;font-size:20px;font-weight:900;font-family:monospace;">${hotspot.totalUsage}</span>
+          </div>
+          <div style="color:#64748b;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;">Student History</div>
+          <div style="max-height:160px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(251,146,60,0.3) transparent;">
+            ${studentRows}${more}
+          </div>
+          <div style="color:#475569;font-size:10px;font-family:monospace;margin-top:10px;text-align:center;">
+            ${hotspot.coordinates.lat.toFixed(5)}, ${hotspot.coordinates.lng.toFixed(5)}
+          </div>
+        </div>`;
+
+      const m = L.marker([hotspot.coordinates.lat, hotspot.coordinates.lng], {
+        icon,
+        zIndexOffset: 750,
+      }).addTo(map);
+
+      m.bindPopup(popupHtml, { className: "rm-popup", closeButton: false, maxWidth: 300 });
+      m.bindTooltip(
+        `${hotspot.totalUsage} pickup${hotspot.totalUsage !== 1 ? "s" : ""}`,
+        { direction: "top", offset: [0, -(half + 6)], className: "rm-tooltip" },
+      );
+
+      refs.current.push(m);
+    });
+
+    return () => { refs.current.forEach(m => { if (map.hasLayer(m)) map.removeLayer(m); }); };
+  }, [map, hotspots]);
+
+  return null;
+}
+
 // ─── Child: Admin/student custom booking markers (may overlap) ────────────────
 function CustomBookingsLayer({ bookings }: { bookings: CustomBooking[] }) {
   const map = useMap();
@@ -611,6 +704,7 @@ export function RouteMap({
   onLocationSelect,
   selectedCoords,
   customBookings,
+  analyticsHotspots,
   showBus = true,
   onBusMoved,
   onTerminalClick,
@@ -876,6 +970,11 @@ export function RouteMap({
         {/* Non-driver custom booking markers */}
         {!isDriver && customBookings && customBookings.length > 0 && (
           <CustomBookingsLayer bookings={customBookings} />
+        )}
+
+        {/* Admin analytics hotspot markers */}
+        {!isDriver && analyticsHotspots && analyticsHotspots.length > 0 && (
+          <AdminAnalyticsLayer hotspots={analyticsHotspots} />
         )}
 
         <PickupMarker position={effectivePickup ?? null} />
