@@ -109,7 +109,7 @@ export default function AdminDashboard() {
     else if (user.role !== "admin") setLocation(user.role === "student" ? "/dashboard" : "/driver");
   }, [user, setLocation]);
 
-  const POLL_INTERVAL = 7_000;
+  const POLL_INTERVAL = 5_000;
 
   const { data: stats, isLoading: statsLoading } = useGetDashboardStats({
     query: {
@@ -159,7 +159,8 @@ export default function AdminDashboard() {
 
   if (!user) return null;
 
-  const tripsWithDemand = demand ?? [];
+  const allTrips = demand ?? [];
+  const tripsWithDemand = allTrips.filter(trip => trip.bookingCount > 0);
   const peakTrip = tripsWithDemand.reduce<typeof tripsWithDemand[number] | null>(
     (peak, trip) => (!peak || trip.bookingCount > peak.bookingCount ? trip : peak),
     null,
@@ -220,7 +221,7 @@ export default function AdminDashboard() {
             <BarChart3 size={16} className="text-[#ff2e88]" />
             <h2 className="font-semibold text-white text-sm">Trip Demand Analysis</h2>
           </div>
-          <span className="text-xs text-[#a7b0c0]">{demand?.length || 0} trips</span>
+          <span className="text-xs text-[#a7b0c0]">{tripsWithDemand.length} trips</span>
         </div>
 
         {demandLoading ? (
@@ -228,7 +229,7 @@ export default function AdminDashboard() {
             <Loader2 size={18} className="animate-spin text-[#ff2e88]" />
             <span className="text-[#a7b0c0] text-sm">Loading trip data...</span>
           </div>
-        ) : demand?.length === 0 ? (
+        ) : tripsWithDemand.length === 0 ? (
           <div className="text-center py-12 text-[#a7b0c0] text-sm">No active trips found.</div>
         ) : (
           <>
@@ -243,10 +244,10 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {demand?.map((trip, idx) => {
+                  {tripsWithDemand.map((trip, idx) => {
                     const fillPct = Math.min(((trip.bookingCount) / (trip.bookingCount + trip.availableSeats)) * 100, 100);
                     return (
-                      <tr key={trip.tripId} className={`${idx !== demand.length - 1 ? "border-b border-white/[0.04]" : ""} hover:bg-white/[0.02] transition-colors`}>
+                      <tr key={trip.tripId} className={`${idx !== tripsWithDemand.length - 1 ? "border-b border-white/[0.04]" : ""} hover:bg-white/[0.02] transition-colors`}>
                         <td className="px-5 py-4 font-mono text-xs text-[#a7b0c0]">#{trip.tripId}</td>
                         <td className="px-5 py-4">
                           <span className="font-mono font-semibold text-white">{trip.departureTime}</span>
@@ -278,7 +279,7 @@ export default function AdminDashboard() {
 
             {/* Mobile cards */}
             <div className="md:hidden divide-y divide-white/[0.06]">
-              {demand?.map((trip) => {
+              {tripsWithDemand.map((trip) => {
                 const fillPct = Math.min(((trip.bookingCount) / (trip.bookingCount + trip.availableSeats)) * 100, 100);
                 return (
                   <div key={trip.tripId} className="p-4 space-y-3">

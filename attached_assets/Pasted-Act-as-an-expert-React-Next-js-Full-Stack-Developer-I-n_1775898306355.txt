@@ -1,0 +1,57 @@
+Act as an expert React/Next.js Full-Stack Developer. I need you to refine the Admin Dashboard (`SystemOverview`) in my "Smart Shuttle Solution" project by hiding empty trip rows and enabling seamless real-time updates across the entire dashboard.
+
+GOAL
+Keep the existing dashboard UI exactly as it is, but improve the data logic so the Admin only sees active trips with real demand, and the dashboard updates automatically in the background without flicker or loading disruption.
+
+TASK 1: Hide Empty Trip Rows in "Trip Demand Analysis"
+- Locate the "Trip Demand Analysis" table inside `SystemOverview` or its related component.
+- Do NOT show any rows where demand is zero or there are no bookings.
+- Only render trips that satisfy one of these conditions:
+  - `demand > 0`
+  - `bookings.length > 0`
+- Apply this filtering to both:
+  - Pending trips
+  - Confirmed trips
+- Completely hide empty time slots so the table only shows active, meaningful trip demand.
+
+TASK 2: Dashboard-Wide Silent Real-Time Updates
+- Implement background polling for the entire dashboard data.
+- The following sections must refresh automatically:
+  - All 8 stat cards
+  - The filtered Trip Demand Analysis table
+- Use one of these approaches:
+  - `SWR` with `refreshInterval: 5000`
+  - `@tanstack/react-query` with `refetchInterval: 5000`
+  - Or a clean `useEffect` + `setInterval`
+- The update must be silent:
+  - No loading spinner during background refresh
+  - No flickering
+  - No UI reset
+  - Keep existing data visible until fresh data arrives
+- The dashboard should feel live and stable.
+
+TASK 3: Backend Freshness / Cache Busting
+- Ensure the API endpoints used by the dashboard always return fresh data.
+- If using Next.js App Router, make the route dynamic using:
+  - `export const dynamic = 'force-dynamic'`
+- Or set proper headers such as:
+  - `Cache-Control: no-store`
+- The backend must compute stats directly from the database on every request.
+- The updated values must reflect:
+  - New student bookings
+  - Driver confirmations
+  - Auto-confirm threshold changes
+  - Cancellations
+- The refreshed data should appear on the next polling cycle without manual page reload.
+
+DELIVERABLES
+1. Updated `SystemOverview` component with silent polling
+2. Updated logic to filter out empty trip rows
+3. Any required backend route/controller changes to guarantee fresh data
+4. Production-ready code that preserves the current dark dashboard theme and layout
+
+Important:
+- Do not change the visual design.
+- Do not add unnecessary UI elements.
+- Focus only on data filtering, live refresh, and cache busting.
+- Keep the implementation clean and scalable.
