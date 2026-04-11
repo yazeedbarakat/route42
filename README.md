@@ -74,3 +74,5 @@ route42 makes it easy for 42 Irbid students to book shuttle rides to and from ca
 ## Built by
 
 [yazeedbarakat](https://github.com/yazeedbarakat) — for 42 Irbid
+[rsn026](https://github.com/rsn026)
+[entrape](https://github.com/entrape)
