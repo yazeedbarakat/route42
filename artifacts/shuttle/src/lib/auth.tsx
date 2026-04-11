@@ -26,7 +26,7 @@ function useTokenState() {
   const [token, setTokenState] = useState<string | null>(() => {
     // Prefer token from OAuth redirect URL so it's available before any query fires
     const urlToken = new URLSearchParams(window.location.search).get("token");
-    if (urlToken) {
+    if (urlToken && !window.location.pathname.includes("/complete-profile")) {
       localStorage.setItem("shuttle_token", urlToken);
       window.history.replaceState({}, "", window.location.pathname);
       setAuthTokenGetter(() => urlToken);
