@@ -582,9 +582,12 @@ export default function MapPage() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
 
-  useEffect(() => { if (!user) setLocation("/"); }, [user, setLocation]);
+  useEffect(() => {
+    if (!user) { setLocation("/"); return; }
+    if (user.role === "student") setLocation("/dashboard");
+  }, [user, setLocation]);
 
-  if (!user) return null;
+  if (!user || user.role === "student") return null;
 
   if (user.role === "driver") return <DriverMapView />;
 

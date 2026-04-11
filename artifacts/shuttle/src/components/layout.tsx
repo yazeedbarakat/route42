@@ -32,7 +32,6 @@ const NAV_LINKS = {
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/book", label: "Book a Ride", icon: CalendarPlus },
     { href: "/history", label: "My Bookings", icon: History },
-    { href: "/map", label: "Route Map", icon: Map },
   ],
   admin: [
     { href: "/admin", label: "Overview", icon: LayoutDashboard },

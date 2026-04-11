@@ -6,7 +6,7 @@ import { Link, useLocation } from "wouter";
 import { useEffect } from "react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarPlus, Map, Clock, MapPin, CheckCircle2, AlertCircle, ArrowRight, Zap, XCircle } from "lucide-react";
+import { CalendarPlus, Clock, MapPin, CheckCircle2, AlertCircle, ArrowRight, Zap, XCircle } from "lucide-react";
 import { CancelBookingModal } from "@/components/cancel-booking-modal";
 import { canCancelBooking, minutesUntilDeparture } from "@/lib/cancel-utils";
 
@@ -130,7 +130,7 @@ export default function Dashboard() {
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3">
         <Link href="/book">
           <div className="group relative bg-gradient-to-br from-[#ff2e88]/20 to-[#7c3aed]/20 border border-[#ff2e88]/25 rounded-xl p-5 cursor-pointer hover:border-[#ff2e88]/50 transition-all duration-200 hover:shadow-[0_0_20px_rgba(255,46,136,0.15)]">
             <div className="flex items-start justify-between mb-4">
@@ -141,19 +141,6 @@ export default function Dashboard() {
             </div>
             <div className="text-base font-semibold text-white">Book a Ride</div>
             <div className="text-xs text-[#a7b0c0] mt-0.5">Reserve your seat for tomorrow</div>
-          </div>
-        </Link>
-
-        <Link href="/map">
-          <div className="group relative bg-gradient-to-br from-[#22d3ee]/10 to-[#0ea5e9]/10 border border-[#22d3ee]/25 rounded-xl p-5 cursor-pointer hover:border-[#22d3ee]/50 transition-all duration-200 hover:shadow-[0_0_20px_rgba(34,211,238,0.15)]">
-            <div className="flex items-start justify-between mb-4">
-              <div className="w-10 h-10 rounded-xl bg-[#22d3ee]/15 flex items-center justify-center">
-                <Map size={20} className="text-[#22d3ee]" />
-              </div>
-              <ArrowRight size={16} className="text-[#22d3ee]/50 group-hover:text-[#22d3ee] transition-colors group-hover:translate-x-0.5 transform duration-150" />
-            </div>
-            <div className="text-base font-semibold text-white">Route Map</div>
-            <div className="text-xs text-[#a7b0c0] mt-0.5">View pickup points & route</div>
           </div>
         </Link>
       </div>
