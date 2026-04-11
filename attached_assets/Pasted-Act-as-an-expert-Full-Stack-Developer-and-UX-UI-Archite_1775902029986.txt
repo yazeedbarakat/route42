@@ -1,0 +1,41 @@
+Act as an expert Full-Stack Developer and UX/UI Architect. I need to completely redesign the "Manage Schedule" feature in my "Smart Shuttle Solution" Admin Panel. 
+
+**Goal:**
+Move the Schedule Manager out of the `SystemOverview` page into its own dedicated page. Replace text inputs with a highly interactive 24-hour range slider, and tie time slots to specific Dates (Today/Tomorrow/Day After) and Directions (Inbound/Outbound).
+
+**Task 1: Routing & Sidebar Navigation**
+* Remove the "Manage Schedule" component entirely from the `SystemOverview` dashboard.
+* Add a new link in the Admin Sidebar menu named "Schedule Manager", placed directly below "Pickup Terminals".
+* Create a new dedicated page/route for this feature (e.g., `/admin/schedule`).
+
+**Task 2: Database Schema & API Update**
+* Update the `TimeSlots` database model. It must now store:
+  - `timeString` (e.g., "08:30 AM")
+  - `direction` ("inbound" or "outbound")
+  - `date` (YYYY-MM-DD format)
+* Update `GET`, `POST`, and `DELETE /api/admin/timeslots` to handle and validate these new fields.
+* **Important:** Ensure the student `BookingPage` fetches times based on their currently selected Date and Direction toggles.
+
+**Task 3: The New Schedule Manager UI (Top Section - Adding Slots)**
+Design an interactive form using the "42 Intranet V2" dark theme:
+* **Date Selector:** A toggle group with 3 options: "Today", "Tomorrow", and "Day After" (calculate and display the actual dates).
+* **Direction Selector:** A toggle group for "Go to 42 Irbid (Inbound)" vs "Return from 42 Irbid (Outbound)".
+* **The 24-Hour Time Slider:** - Do NOT use a text input. Use an `<input type="range">` (or a custom slider component).
+  - The slider should span 24 hours, with steps of 15 or 30 minutes.
+  - As the admin drags the slider thumb, dynamically display the selected time in huge, glowing neon text above it (e.g., "02:30 PM").
+* **Submit Button:** A glowing button to "Add Time Slot" that triggers the global notification we built previously.
+
+**Task 4: Current Schedule Display (Bottom Section)**
+* Below the interactive form, display the existing time slots fetched from the database.
+* Group or filter these slots visually by Date and Direction so the Admin knows exactly what the schedule looks like for a specific day.
+* Keep the "Delete" (trash icon) functionality for each slot.
+
+**Constraints:**
+* Strictly enforce `role === 'admin'` on this new page and its API routes.
+* Keep the UI dark, sleek, and consistent. Do not use default HTML slider styling; style the range slider to look modern (e.g., a colored track with a circular thumb).
+
+Please provide the code for:
+1. The new Sidebar navigation link.
+2. The updated DB schema/API logic.
+3. The new `/admin/schedule` page component with the interactive Slider and Toggles.
+شو بعمل هاذ؟ وكويس؟

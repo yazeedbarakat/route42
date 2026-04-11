@@ -81,9 +81,10 @@ export default function Book() {
   const { data: trips, isLoading: tripsLoading } = useGetTrips({ date: selectedDate });
   const { data: pickupPoints } = useGetPickupPoints();
   const { data: myBookings } = useGetBookings();
-  const { data: timeSlots = [], isLoading: slotsLoading } = useGetTimeSlots({
-    query: { refetchInterval: 30_000 },
-  });
+  const { data: timeSlots = [], isLoading: slotsLoading } = useGetTimeSlots(
+    { date: selectedDate, direction },
+    { query: { refetchInterval: 30_000 } },
+  );
   const createBooking = useCreateBooking();
 
   const activeSlots = timeSlots.map(s => s.timeString);

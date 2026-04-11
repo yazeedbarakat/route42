@@ -108,27 +108,45 @@ export const useGetCustomPickupsHistory = <TError = ErrorType<unknown>>(options?
 export interface TimeSlot {
   id: number;
   timeString: string;
+  direction: string;
+  date: string;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
-export const getTimeSlots = async (): Promise<TimeSlot[]> => {
-  return customFetch<TimeSlot[]>("/api/timeslots");
+export interface GetTimeSlotsParams {
+  date?: string;
+  direction?: string;
+}
+
+export const getTimeSlots = async (params?: GetTimeSlotsParams): Promise<TimeSlot[]> => {
+  const qs = new URLSearchParams();
+  if (params?.date)      qs.set("date", params.date);
+  if (params?.direction) qs.set("direction", params.direction);
+  const query = qs.toString() ? `?${qs.toString()}` : "";
+  return customFetch<TimeSlot[]>(`/api/timeslots${query}`);
 };
 
-export const useGetTimeSlots = <TError = ErrorType<unknown>>(options?: {
-  query?: UseQueryOptions<TimeSlot[], TError>;
-}): UseQueryResult<TimeSlot[], TError> => {
+export const useGetTimeSlots = <TError = ErrorType<unknown>>(
+  params?: GetTimeSlotsParams,
+  options?: { query?: UseQueryOptions<TimeSlot[], TError> },
+): UseQueryResult<TimeSlot[], TError> => {
   return useQuery<TimeSlot[], TError>({
-    queryKey: ["timeslots"],
-    queryFn: getTimeSlots,
+    queryKey: ["timeslots", params?.date, params?.direction],
+    queryFn: () => getTimeSlots(params),
     staleTime: 30_000,
     ...options?.query,
   });
 };
 
-export const addTimeSlot = async (body: { timeString: string }): Promise<TimeSlot> => {
+export interface AddTimeSlotBody {
+  timeString: string;
+  direction: string;
+  date: string;
+}
+
+export const addTimeSlot = async (body: AddTimeSlotBody): Promise<TimeSlot> => {
   return customFetch<TimeSlot>("/api/admin/timeslots", {
     method: "POST",
     body: JSON.stringify(body),
@@ -136,9 +154,9 @@ export const addTimeSlot = async (body: { timeString: string }): Promise<TimeSlo
 };
 
 export const useAddTimeSlot = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
-  mutation?: UseMutationOptions<TimeSlot, TError, { timeString: string }, TContext>;
-}): UseMutationResult<TimeSlot, TError, { timeString: string }, TContext> => {
-  return useMutation<TimeSlot, TError, { timeString: string }, TContext>({
+  mutation?: UseMutationOptions<TimeSlot, TError, AddTimeSlotBody, TContext>;
+}): UseMutationResult<TimeSlot, TError, AddTimeSlotBody, TContext> => {
+  return useMutation<TimeSlot, TError, AddTimeSlotBody, TContext>({
     mutationFn: (data) => addTimeSlot(data),
     ...options?.mutation,
   });

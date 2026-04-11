@@ -135,17 +135,21 @@ app.listen(port, async (err) => {
       await db.insert(pickupPointsTable).values(defaultPickupTerminals);
     }
 
-    // Seed default time slots if none exist yet.
+    // Seed default time slots. Re-seed if schema changed (slots missing date/direction).
     const existingSlots = await db.select().from(timeSlotsTable);
-    if (existingSlots.length === 0) {
-      const defaultSlots = [
-        "08:00 AM", "10:00 AM", "12:00 PM",
-        "01:00 PM", "02:00 PM", "03:00 PM",
-        "04:00 PM", "05:00 PM", "06:00 PM", "07:00 PM",
-      ];
-      await db.insert(timeSlotsTable).values(
-        defaultSlots.map(timeString => ({ timeString, isActive: true })),
-      );
+    const needsReseed = existingSlots.length === 0 || existingSlots.some(s => !s.date);
+    if (needsReseed) {
+      if (existingSlots.length > 0) await db.delete(timeSlotsTable);
+      const today    = new Date().toISOString().split("T")[0];
+      const tomorrow = new Date(Date.now() + 86_400_000).toISOString().split("T")[0];
+      const inbound  = ["08:00 AM", "10:00 AM", "12:00 PM", "02:00 PM", "04:00 PM", "06:00 PM"];
+      const outbound = ["01:00 PM", "03:00 PM", "05:00 PM", "07:00 PM"];
+      const toSeed = [];
+      for (const date of [today, tomorrow]) {
+        for (const timeString of inbound)  toSeed.push({ timeString, direction: "inbound",  date, isActive: true });
+        for (const timeString of outbound) toSeed.push({ timeString, direction: "outbound", date, isActive: true });
+      }
+      await db.insert(timeSlotsTable).values(toSeed);
     }
 
     logger.info("Demo credentials are ready");
