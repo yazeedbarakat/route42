@@ -1,0 +1,31 @@
+Act as an expert React/Next.js Full-Stack Developer. I need to add "Drill-down" functionality to all 8 stat cards in the Admin Dashboard (`SystemOverview` component) of my "Smart Shuttle Solution".
+
+**Goal:**
+Keep all 8 existing stat cards exactly as they are in the UI. However, make EVERY card clickable. When the Admin clicks any of the 8 cards, a single dynamic modal should open, displaying a data table specific to the clicked metric.
+
+**Task 1: Make All 8 Cards Interactive**
+* In the `SystemOverview` component, ensure all 8 cards (Total Students, Bookings Today, Confirmed Trips, Pending Trips, Trips This Week, Avg Occupancy, Peak Time, Efficiency) remain in the grid.
+* Add `cursor-pointer` and a subtle hover effect (e.g., scale or border glow) to all of them.
+* Add an `onClick` handler to pass the specific metric type to a state variable (e.g., `setActiveCard('totalStudents')`).
+
+**Task 2: The Dynamic Modal Component (`StatDetailsModal.jsx`)**
+* Create a single, reusable modal component that overlays the dashboard.
+* Use the "42 Intranet V2" dark theme (navy background, rounded borders, blurred backdrop) and include a close button.
+* The modal must dynamically change its Title, Table Headers, and Data based on the `activeCard` prop.
+
+**Task 3: Data Mapping for the 8 Cards**
+Implement a switch/map logic inside the modal for these 8 cases:
+1. **Total Students:** Table showing [Student Name, ID, Total Rides].
+2. **Bookings Today:** Table showing [Student Name, Pickup Location, Time, Status].
+3. **Confirmed Trips:** Table showing [Trip Time, Driver, Passengers (e.g., 5/15)].
+4. **Pending Trips:** Table showing [Trip Time, Passengers waiting, Seats Needed for Confirm].
+5. **Trips This Week:** Table showing [Date, Trips Dispatched, Total Passengers].
+6. **Avg Occupancy:** Table showing [Date, Average % Filled, Total Seats Used].
+7. **Peak Time:** Table showing [Time Slot, Number of Requests].
+8. **Efficiency:** Table showing [Date, Efficiency Percentage, Wasted Seats].
+
+**Task 4: Backend API Fetching**
+* Create a unified API endpoint like `GET /api/admin/stat-details?card={activeCard}`.
+* The backend controller must handle all 8 cases, query the database accordingly, and return the formatted array for the modal to display.
+
+Please provide the updated `SystemOverview` code with the clickable grid of 8 cards, and the complete code for the new `StatDetailsModal` component.

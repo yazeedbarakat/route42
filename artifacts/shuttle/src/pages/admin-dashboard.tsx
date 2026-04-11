@@ -1,43 +1,80 @@
-import { useGetDashboardStats, useGetTripDemand, useConfirmTrip, useCancelTrip, useGetCustomPickupsHistory } from "@workspace/api-client-react";
+import {
+  useGetDashboardStats, useGetTripDemand, useConfirmTrip, useCancelTrip,
+  useGetCustomPickupsHistory, type StatCardKey,
+} from "@workspace/api-client-react";
 import { useAuth } from "@/lib/auth";
 import { useLocation, Link } from "wouter";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { Users, CalendarCheck, Clock, TrendingUp, CheckCircle2, AlertCircle, XCircle, ArrowRight, Loader2, BarChart3, Shield, Map } from "lucide-react";
+import {
+  Users, CalendarCheck, Clock, TrendingUp, CheckCircle2, AlertCircle,
+  XCircle, ArrowRight, Loader2, BarChart3, Shield, Map, ChevronRight,
+} from "lucide-react";
 import { RouteMap } from "@/components/route-map";
+import { StatDetailsModal } from "@/components/stat-details-modal";
 
-function StatCard({ label, value, icon: Icon, color, loading }: {
-  label: string; value: string | number | undefined; icon: any; color: string; loading: boolean;
+// ─── StatCard ─────────────────────────────────────────────────────────────────
+function StatCard({
+  label, value, icon: Icon, color, loading, onClick,
+}: {
+  label: string;
+  value: string | number | undefined;
+  icon: any;
+  color: string;
+  loading: boolean;
+  onClick?: () => void;
 }) {
   const colorMap: Record<string, string> = {
-    pink:    "from-[#ff2e88]/20 to-[#ff2e88]/5 border-[#ff2e88]/20 text-[#ff2e88]",
-    cyan:    "from-[#22d3ee]/20 to-[#22d3ee]/5 border-[#22d3ee]/20 text-[#22d3ee]",
-    emerald: "from-emerald-400/20 to-emerald-400/5 border-emerald-400/20 text-emerald-400",
-    amber:   "from-amber-400/20 to-amber-400/5 border-amber-400/20 text-amber-400",
-    purple:  "from-purple-400/20 to-purple-400/5 border-purple-400/20 text-purple-400",
-    blue:    "from-blue-400/20 to-blue-400/5 border-blue-400/20 text-blue-400",
+    pink:    "from-[#ff2e88]/20 to-[#ff2e88]/5 border-[#ff2e88]/20 text-[#ff2e88] shadow-[#ff2e88]",
+    cyan:    "from-[#22d3ee]/20 to-[#22d3ee]/5 border-[#22d3ee]/20 text-[#22d3ee] shadow-[#22d3ee]",
+    emerald: "from-emerald-400/20 to-emerald-400/5 border-emerald-400/20 text-emerald-400 shadow-emerald-400",
+    amber:   "from-amber-400/20 to-amber-400/5 border-amber-400/20 text-amber-400 shadow-amber-400",
+    purple:  "from-purple-400/20 to-purple-400/5 border-purple-400/20 text-purple-400 shadow-purple-400",
+    blue:    "from-blue-400/20 to-blue-400/5 border-blue-400/20 text-blue-400 shadow-blue-400",
   };
   const cls = colorMap[color] || colorMap.cyan;
-  const [gradientCls, borderCls, textCls] = [
-    `bg-gradient-to-br ${cls.split(" ").slice(0, 2).join(" ")}`,
-    cls.split(" ")[2],
-    cls.split(" ")[3],
-  ];
+  const parts = cls.split(" ");
+  const gradientCls = `bg-gradient-to-br ${parts[0]} ${parts[1]}`;
+  const borderCls   = parts[2];
+  const textCls     = parts[3];
+
   return (
-    <div className={`relative rounded-xl border p-5 overflow-hidden bg-white/[0.02] ${borderCls}`}>
+    <div
+      onClick={onClick}
+      className={`
+        group relative rounded-xl border p-5 overflow-hidden bg-white/[0.02] ${borderCls}
+        transition-all duration-200
+        ${onClick ? "cursor-pointer hover:scale-[1.02] hover:bg-white/[0.04] hover:shadow-lg active:scale-[0.99]" : ""}
+      `}
+      style={onClick ? { transition: "transform 0.15s, box-shadow 0.15s, background 0.15s" } : undefined}
+    >
       <div className="flex items-start justify-between mb-4">
         <div className={`w-10 h-10 rounded-xl ${gradientCls} flex items-center justify-center`}>
           <Icon size={18} className={textCls} />
         </div>
+        {onClick && (
+          <ChevronRight
+            size={14}
+            className={`${textCls} opacity-0 group-hover:opacity-60 transition-opacity -mt-0.5 -mr-0.5`}
+          />
+        )}
       </div>
       <div className={`text-3xl font-bold font-mono mb-1 ${textCls}`}>
-        {loading ? <div className="w-12 h-8 bg-white/10 rounded animate-pulse" /> : (value ?? "—")}
+        {loading
+          ? <div className="w-12 h-8 bg-white/10 rounded animate-pulse" />
+          : (value ?? "—")}
       </div>
       <div className="text-xs text-[#a7b0c0] font-medium">{label}</div>
+
+      {/* Hover glow line at bottom */}
+      {onClick && (
+        <div className={`absolute bottom-0 left-0 right-0 h-px ${textCls} opacity-0 group-hover:opacity-30 transition-opacity bg-current`} />
+      )}
     </div>
   );
 }
 
+// ─── TripStatusBadge ──────────────────────────────────────────────────────────
 function TripStatusBadge({ status }: { status: string }) {
   if (status === "confirmed") return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-400/10 text-emerald-400 border border-emerald-400/20">
@@ -56,11 +93,13 @@ function TripStatusBadge({ status }: { status: string }) {
   );
 }
 
+// ─── AdminDashboard ───────────────────────────────────────────────────────────
 export default function AdminDashboard() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [showCustomMap, setShowCustomMap] = useState(false);
+  const [activeCard, setActiveCard] = useState<StatCardKey | null>(null);
 
   useEffect(() => {
     if (!user) setLocation("/");
@@ -101,17 +140,19 @@ export default function AdminDashboard() {
   const tripsWithDemand = demand ?? [];
   const peakTrip = tripsWithDemand.reduce<typeof tripsWithDemand[number] | null>(
     (peak, trip) => (!peak || trip.bookingCount > peak.bookingCount ? trip : peak),
-    null
+    null,
   );
   const totalBookedSeats = tripsWithDemand.reduce((sum, trip) => sum + trip.bookingCount, 0);
   const totalSeats = tripsWithDemand.reduce((sum, trip) => sum + trip.bookingCount + trip.availableSeats, 0);
   const efficiency = totalSeats > 0 ? Math.round((totalBookedSeats / totalSeats) * 100) : 0;
-
   const totalCustomPickups = hotspots.reduce((sum, h) => sum + h.totalUsage, 0);
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* ── Drill-Down Modal ── */}
+      <StatDetailsModal card={activeCard} onClose={() => setActiveCard(null)} />
+
+      {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -121,26 +162,36 @@ export default function AdminDashboard() {
           <h1 className="text-2xl font-bold text-white">System Overview</h1>
           <p className="text-[#a7b0c0] text-sm mt-0.5">Logged in as {user.name}</p>
         </div>
-        <Link href="/admin/bookings">
-          <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-white/[0.1] text-sm text-[#a7b0c0] hover:border-[#ff2e88]/40 hover:text-[#ff2e88] transition-all">
-            All Bookings <ArrowRight size={14} />
-          </button>
-        </Link>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] text-[#a7b0c0] hidden sm:block">
+            Click any card to drill down
+          </span>
+          <Link href="/admin/bookings">
+            <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-white/[0.1] text-sm text-[#a7b0c0] hover:border-[#ff2e88]/40 hover:text-[#ff2e88] transition-all">
+              All Bookings <ArrowRight size={14} />
+            </button>
+          </Link>
+        </div>
       </div>
 
-      {/* Stats grid */}
+      {/* ── Stats grid — all 8 cards clickable ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Students"   value={stats?.totalStudents}             icon={Users}         color="cyan"    loading={statsLoading} />
-        <StatCard label="Bookings Today"   value={stats?.totalBookingsToday}         icon={CalendarCheck} color="pink"    loading={statsLoading} />
-        <StatCard label="Confirmed Trips"  value={stats?.confirmedTripsToday}        icon={CheckCircle2}  color="emerald" loading={statsLoading} />
-        <StatCard label="Pending Trips"    value={stats?.pendingTripsToday}          icon={Clock}         color="amber"   loading={statsLoading} />
-        <StatCard label="Trips This Week"  value={stats?.totalTripsThisWeek}         icon={BarChart3}     color="purple"  loading={statsLoading} />
-        <StatCard label="Avg Occupancy"    value={stats?.averageOccupancyRate !== undefined ? `${stats.averageOccupancyRate}%` : undefined} icon={TrendingUp} color="blue" loading={statsLoading} />
-        <StatCard label="Peak Time"        value={peakTrip ? peakTrip.departureTime : "—"} icon={Clock} color="amber" loading={demandLoading} />
-        <StatCard label="Efficiency"       value={`${efficiency}%`} icon={TrendingUp} color="emerald" loading={demandLoading} />
+        <StatCard label="Total Students"  value={stats?.totalStudents}             icon={Users}         color="cyan"    loading={statsLoading} onClick={() => setActiveCard("totalStudents")}  />
+        <StatCard label="Bookings Today"  value={stats?.totalBookingsToday}         icon={CalendarCheck} color="pink"    loading={statsLoading} onClick={() => setActiveCard("bookingsToday")}  />
+        <StatCard label="Confirmed Trips" value={stats?.confirmedTripsToday}        icon={CheckCircle2}  color="emerald" loading={statsLoading} onClick={() => setActiveCard("confirmedTrips")} />
+        <StatCard label="Pending Trips"   value={stats?.pendingTripsToday}          icon={Clock}         color="amber"   loading={statsLoading} onClick={() => setActiveCard("pendingTrips")}   />
+        <StatCard label="Trips This Week" value={stats?.totalTripsThisWeek}         icon={BarChart3}     color="purple"  loading={statsLoading} onClick={() => setActiveCard("tripsThisWeek")}  />
+        <StatCard
+          label="Avg Occupancy"
+          value={stats?.averageOccupancyRate !== undefined ? `${stats.averageOccupancyRate}%` : undefined}
+          icon={TrendingUp} color="blue" loading={statsLoading}
+          onClick={() => setActiveCard("avgOccupancy")}
+        />
+        <StatCard label="Peak Time"  value={peakTrip ? peakTrip.departureTime : "—"} icon={Clock}      color="amber"   loading={demandLoading} onClick={() => setActiveCard("peakTime")}   />
+        <StatCard label="Efficiency" value={`${efficiency}%`}                         icon={TrendingUp} color="emerald" loading={demandLoading} onClick={() => setActiveCard("efficiency")} />
       </div>
 
-      {/* Trip demand table */}
+      {/* ── Trip demand table ── */}
       <div className="bg-white/[0.03] border border-white/[0.08] rounded-xl overflow-hidden">
         <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between">
           <div className="flex items-center gap-2">

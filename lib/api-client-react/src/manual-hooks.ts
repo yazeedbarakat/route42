@@ -102,3 +102,37 @@ export const useGetCustomPickupsHistory = <TError = ErrorType<unknown>>(options?
     ...options?.query,
   });
 };
+
+// ─── Admin: Stat Card Drill-Down ──────────────────────────────────────────────
+
+export type StatCardKey =
+  | "totalStudents"
+  | "bookingsToday"
+  | "confirmedTrips"
+  | "pendingTrips"
+  | "tripsThisWeek"
+  | "avgOccupancy"
+  | "peakTime"
+  | "efficiency";
+
+export interface StatDetailsResponse {
+  columns: string[];
+  rows: Record<string, string | number>[];
+}
+
+export const getStatDetails = async (card: StatCardKey): Promise<StatDetailsResponse> => {
+  return customFetch<StatDetailsResponse>(`/api/admin/stat-details?card=${card}`);
+};
+
+export const useGetStatDetails = <TError = ErrorType<unknown>>(
+  card: StatCardKey | null,
+  options?: { query?: UseQueryOptions<StatDetailsResponse, TError> },
+): UseQueryResult<StatDetailsResponse, TError> => {
+  return useQuery<StatDetailsResponse, TError>({
+    queryKey: ["admin", "stat-details", card],
+    queryFn: () => getStatDetails(card!),
+    enabled: card !== null,
+    staleTime: 30_000,
+    ...options?.query,
+  });
+};
