@@ -56,6 +56,27 @@ function frontendUrl(path: string): string {
   return `http://localhost:${process.env.PORT ?? 3000}${path}`;
 }
 
+/**
+ * Returns a self-submitting HTML page that stores `tempToken` in sessionStorage
+ * then immediately navigates to /complete-profile.
+ * This is more reliable than passing the token in the URL, because it
+ * guarantees the token is stored before React initialises.
+ */
+function completeProfileBridge(tempToken: string): string {
+  // Escape the token so it's safe to embed in a JS string literal.
+  const safeToken = tempToken.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Redirecting…</title></head>
+<body>
+<script>
+  try { sessionStorage.setItem('shuttle_temp_token', '${safeToken}'); } catch(e) {}
+  window.location.replace('/complete-profile');
+</script>
+</body>
+</html>`;
+}
+
 // ─── Google OAuth — initiate ──────────────────────────────────────────────────
 router.get("/auth/google", (req, res): void => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -106,9 +127,10 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
     }
 
     if (!existing.profileComplete) {
-      // Still needs to finish setup
+      // Still needs to finish setup — use the bridge page so the token lands
+      // in sessionStorage before React initialises, avoiding URL-strip races.
       const tempToken = signTempToken({ userId: existing.id, email: existing.email });
-      res.redirect(frontendUrl(`/complete-profile?token=${tempToken}`));
+      res.send(completeProfileBridge(tempToken));
       return;
     }
 
@@ -132,7 +154,7 @@ router.get("/auth/google/callback", async (req, res): Promise<void> => {
     .returning();
 
   const tempToken = signTempToken({ userId: newUser.id, email: newUser.email });
-  res.redirect(frontendUrl(`/complete-profile?token=${tempToken}`));
+  res.send(completeProfileBridge(tempToken));
 });
 
 // ─── Complete Google profile (name, phone, password) ─────────────────────────
