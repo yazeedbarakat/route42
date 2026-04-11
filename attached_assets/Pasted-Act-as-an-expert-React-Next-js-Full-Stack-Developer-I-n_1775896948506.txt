@@ -1,0 +1,20 @@
+Act as an expert React/Next.js Full-Stack Developer. I need to implement real-time data synchronization for the Admin Dashboard (`SystemOverview`) in my "Smart Shuttle Solution".
+
+**Goal:**
+The 8 stat cards (especially "Confirmed Trips" and "Pending Trips") must update automatically and seamlessly whenever a Driver or an Admin confirms/cancels a trip. The Admin should not need to manually refresh the page to see these changes.
+
+**Task 1: Live Polling (Frontend Data Fetching)**
+* Update the data fetching logic inside the `SystemOverview` component.
+* If you are using `SWR` or `@tanstack/react-query`, configure it to auto-refresh (poll) the stats API endpoint every 5 to 10 seconds (`refreshInterval: 5000` or `refetchInterval: 5000`).
+* If using standard `useEffect` and `fetch`, implement a `setInterval` that fetches the data every 5-10 seconds.
+* **Crucial:** The UI must update smoothly. Do NOT show loading spinners or cause the grid to flicker during these background background fetches. Keep the stale data visible until the fresh data arrives.
+
+**Task 2: Cache Busting (Backend/API)**
+* Locate the API endpoint that supplies the data for these 8 cards (e.g., `GET /api/admin/dashboard-stats`).
+* Ensure this endpoint calculates the metrics dynamically straight from the database on every request.
+* If using Next.js App Router, ensure the route is strictly dynamic. Add `export const dynamic = 'force-dynamic'` or use `no-store` headers to prevent Next.js from aggressively caching the old stats.
+
+**Task 3: Global State / Revalidation (Optional but recommended)**
+* If the Admin themselves clicks a button to confirm a trip from within the Admin Panel, immediately trigger a revalidation/mutation of the stats data so the cards update instantly, without waiting for the next polling cycle.
+
+Please provide the updated `SystemOverview` component code implementing this seamless live-updating logic, and the necessary tweaks to the backend endpoint to ensure fresh data is always served.

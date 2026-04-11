@@ -7,6 +7,8 @@ import { GetTripDemandQueryParams } from "@workspace/api-zod";
 const router: IRouter = Router();
 
 router.get("/stats/dashboard", requireAuth, requireRole("admin"), async (_req, res): Promise<void> => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
   const today = new Date().toISOString().split("T")[0];
 
   const [totalBookingsTodayResult] = await db
@@ -57,6 +59,8 @@ router.get("/stats/dashboard", requireAuth, requireRole("admin"), async (_req, r
 });
 
 router.get("/stats/demand", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
   const parsed = GetTripDemandQueryParams.safeParse(req.query);
   const date = parsed.success && parsed.data.date ? parsed.data.date : getTomorrow();
 

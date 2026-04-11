@@ -1,7 +1,9 @@
 import {
   useGetDashboardStats, useGetTripDemand, useConfirmTrip, useCancelTrip,
   useGetCustomPickupsHistory, type StatCardKey,
+  getGetDashboardStatsQueryKey, getGetTripDemandQueryKey,
 } from "@workspace/api-client-react";
+import { useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useLocation, Link } from "wouter";
 import { useEffect, useState } from "react";
@@ -100,25 +102,45 @@ export default function AdminDashboard() {
   const { toast } = useToast();
   const [showCustomMap, setShowCustomMap] = useState(false);
   const [activeCard, setActiveCard] = useState<StatCardKey | null>(null);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!user) setLocation("/");
     else if (user.role !== "admin") setLocation(user.role === "student" ? "/dashboard" : "/driver");
   }, [user, setLocation]);
 
-  const { data: stats, isLoading: statsLoading } = useGetDashboardStats();
-  const { data: demand, isLoading: demandLoading, refetch: refetchDemand } = useGetTripDemand();
+  const POLL_INTERVAL = 7_000;
+
+  const { data: stats, isLoading: statsLoading } = useGetDashboardStats({
+    query: {
+      refetchInterval: POLL_INTERVAL,
+      placeholderData: keepPreviousData,
+    },
+  });
+
+  const { data: demand, isLoading: demandLoading } = useGetTripDemand(undefined, {
+    query: {
+      refetchInterval: POLL_INTERVAL,
+      placeholderData: keepPreviousData,
+    },
+  });
+
   const { data: hotspots = [], isLoading: hotspotsLoading } = useGetCustomPickupsHistory({
     query: { enabled: user?.role === "admin" },
   });
   const confirmTrip = useConfirmTrip();
   const cancelTrip  = useCancelTrip();
 
+  const invalidateStats = () => {
+    queryClient.invalidateQueries({ queryKey: getGetDashboardStatsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetTripDemandQueryKey() });
+  };
+
   const handleConfirm = async (id: number) => {
     try {
       await confirmTrip.mutateAsync({ id });
       toast({ title: "Trip confirmed", description: "Trip has been manually confirmed." });
-      refetchDemand();
+      invalidateStats();
     } catch (err: any) {
       toast({ title: "Error", description: err?.message, variant: "destructive" });
     }
@@ -129,7 +151,7 @@ export default function AdminDashboard() {
     try {
       await cancelTrip.mutateAsync({ id });
       toast({ title: "Trip cancelled", description: "Trip has been cancelled." });
-      refetchDemand();
+      invalidateStats();
     } catch (err: any) {
       toast({ title: "Error", description: err?.message, variant: "destructive" });
     }
