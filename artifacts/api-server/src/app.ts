@@ -34,7 +34,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use("/api", router);
 
 // Serve frontend static files in production
-const frontendDist = path.resolve(process.cwd(), "../../artifacts/shuttle/dist/public");
+const frontendDist = path.resolve(process.cwd(), "artifacts/shuttle/dist/public");
 if (fs.existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
   app.get("*", (_req, res) => {
