@@ -25,12 +25,16 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 function useTokenState() {
   const [token, setTokenState] = useState<string | null>(() => {
     // Prefer token from OAuth redirect URL so it's available before any query fires
+    const isCompleteProfile = window.location.pathname.includes("/complete-profile");
     const urlToken = new URLSearchParams(window.location.search).get("token");
-    if (urlToken && !window.location.pathname.includes("/complete-profile")) {
+    if (urlToken && !isCompleteProfile) {
       localStorage.setItem("shuttle_token", urlToken);
       window.history.replaceState({}, "", window.location.pathname);
       setAuthTokenGetter(() => urlToken);
       return urlToken;
+    }
+    if (isCompleteProfile) {
+      return null;
     }
     const stored = localStorage.getItem("shuttle_token");
     if (stored) setAuthTokenGetter(() => stored);
