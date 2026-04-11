@@ -1,0 +1,37 @@
+Act as an expert Full-Stack Developer. I need to perform a global refactor in my "Smart Shuttle Solution" project.
+
+Goal:
+Completely remove all logic, UI elements, and API support for the "Day After" booking/scheduling option across the entire system. The system must strictly only allow actions and views for "Today" and "Tomorrow".
+
+Timezone Rule:
+All date logic, validation, filtering, and display rules must use Jordan timezone (Asia/Amman). The definition of today and tomorrow must be based on Jordan local date, not the server default timezone and not the user's device timezone. Any request with a date outside of Jordan-local today or tomorrow must be rejected with 400 Bad Request.
+
+Task 1: Admin Panel Refactor
+- In the Manage Schedule component: remove the "Day After" option from the date selector toggle group.
+- The Admin should only be able to add/view time slots for Today and Tomorrow.
+- In any Admin trip filters or dashboards: ensure date filters are restricted to Today and Tomorrow only.
+
+Task 2: Student Panel Refactor (BookingPage.jsx)
+- Update the date selection UI so it only shows Today and Tomorrow.
+- If there is a toggle, dropdown, or calendar, restrict it to only those two dates.
+- Remove any state logic or variables referencing dayAfter, today + 2, or any third-day scheduling logic.
+
+Task 3: Driver Panel Refactor
+- If the Driver Dashboard has filters to view upcoming trips, remove any options allowing them to see trips beyond Tomorrow.
+- The driver's focus should remain strictly on active trips for Today and scheduled trips for Tomorrow.
+
+Task 4: Backend API & Validation Security
+- Locate the controllers handling bookings and schedule creation, such as POST /api/bookings and POST /api/admin/timeslots.
+- Add strict date validation logic using Jordan timezone (Asia/Amman).
+- Calculate today and tomorrow based on Jordan local time using a reliable method such as date-fns, moment-timezone, or native JS with proper timezone handling.
+- Reject any incoming request with a 400 Bad Request if the date payload is outside of Today or Tomorrow.
+- Update the GET endpoints to ensure they only query and return records for these two days.
+
+Constraints:
+- Do not break or alter the existing logic for Today and Tomorrow.
+- They must continue to function exactly as they do now.
+- Ensure UI elements adjust gracefully, for example, a 3-button toggle should become a 2-button toggle with equal spacing.
+- Keep all "42 Intranet V2" dark theme styling intact.
+
+Deliverables:
+Please provide the necessary code updates for the Frontend components (Admin, Student, Driver) and the Backend API validation logic, plus any helper utilities needed for Jordan timezone date handling. Only return the code changes and the exact files modified, with clean and production-ready implementation.

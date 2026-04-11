@@ -14,16 +14,23 @@ import {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function getDateLabel(offset: 0 | 1 | 2): { label: string; iso: string; display: string } {
-  const d = new Date();
-  d.setDate(d.getDate() + offset);
-  const iso = d.toISOString().split("T")[0];
-  const display = d.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
-  const labels = ["Today", "Tomorrow", "Day After"] as const;
+function getJordanDateISO(offsetDays = 0): string {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Amman" }).format(new Date());
+  if (offsetDays === 0) return today;
+  const base = new Date(`${today}T12:00:00Z`);
+  base.setUTCDate(base.getUTCDate() + offsetDays);
+  return base.toISOString().split("T")[0];
+}
+
+function getDateLabel(offset: 0 | 1): { label: string; iso: string; display: string } {
+  const iso = getJordanDateISO(offset);
+  const d = new Date(`${iso}T12:00:00Z`);
+  const display = d.toLocaleDateString("en-GB", { month: "short", day: "numeric", timeZone: "UTC" });
+  const labels = ["Today", "Tomorrow"] as const;
   return { label: labels[offset], iso, display };
 }
 
-const DATE_OPTIONS = [getDateLabel(0), getDateLabel(1), getDateLabel(2)];
+const DATE_OPTIONS = [getDateLabel(0), getDateLabel(1)];
 
 const STEP = 30; // minutes
 const TOTAL_STEPS = (24 * 60) / STEP; // 0..47
@@ -57,7 +64,7 @@ export default function AdminSchedule() {
   const qc = useQueryClient();
 
   // form state
-  const [selectedDateIdx, setSelectedDateIdx] = useState<0 | 1 | 2>(0);
+  const [selectedDateIdx, setSelectedDateIdx] = useState<0 | 1>(0);
   const [direction, setDirection] = useState<"inbound" | "outbound">("inbound");
   const [sliderValue, setSliderValue] = useState(16); // default 08:00 AM
   const [addError, setAddError] = useState("");
@@ -158,7 +165,7 @@ export default function AdminSchedule() {
               {DATE_OPTIONS.map((opt, idx) => (
                 <button
                   key={opt.iso}
-                  onClick={() => setSelectedDateIdx(idx as 0 | 1 | 2)}
+                  onClick={() => setSelectedDateIdx(idx as 0 | 1)}
                   className={`
                     px-4 py-2 rounded-xl text-sm font-medium border transition-all
                     ${selectedDateIdx === idx

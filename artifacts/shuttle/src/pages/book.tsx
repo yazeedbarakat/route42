@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { format, addDays, isToday, parseISO } from "date-fns";
+import { parseISO } from "date-fns";
 import {
   Clock, CheckCircle2, ChevronRight, Loader2,
   CalendarDays, Info, Navigation, ArrowRight, ArrowLeft, Users,
@@ -21,6 +21,21 @@ function parseSlotHour(slot: string): { h: number; m: number } {
   if (period === "PM" && h !== 12) h += 12;
   if (period === "AM" && h === 12) h = 0;
   return { h, m };
+}
+
+function getJordanDateISO(offsetDays = 0): string {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Amman" }).format(new Date());
+  if (offsetDays === 0) return today;
+  const base = new Date(`${today}T12:00:00Z`);
+  base.setUTCDate(base.getUTCDate() + offsetDays);
+  return base.toISOString().split("T")[0];
+}
+
+function getJordanDisplayDate(offsetDays = 0): string {
+  const iso = getJordanDateISO(offsetDays);
+  return new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-US", {
+    weekday: "short", month: "short", day: "numeric", timeZone: "UTC",
+  });
 }
 
 function isSlotAvailableToday(slot: string): boolean {
@@ -65,11 +80,10 @@ export default function Book() {
     else if (user.role !== "student") setLocation(user.role === "admin" ? "/admin" : "/driver");
   }, [user, setLocation]);
 
-  // Date options: today, tomorrow, day after
+  // Date options: today and tomorrow only (Jordan timezone)
   const dateOptions = [
-    { label: "Today",      sub: format(new Date(), "EEE, MMM d"),         value: format(new Date(), "yyyy-MM-dd") },
-    { label: "Tomorrow",   sub: format(addDays(new Date(), 1), "EEE, MMM d"), value: format(addDays(new Date(), 1), "yyyy-MM-dd") },
-    { label: "Day After",  sub: format(addDays(new Date(), 2), "EEE, MMM d"), value: format(addDays(new Date(), 2), "yyyy-MM-dd") },
+    { label: "Today",    sub: getJordanDisplayDate(0), value: getJordanDateISO(0) },
+    { label: "Tomorrow", sub: getJordanDisplayDate(1), value: getJordanDateISO(1) },
   ];
 
   const [selectedDate, setSelectedDate] = useState<string>(dateOptions[1].value); // default: tomorrow
@@ -183,7 +197,7 @@ export default function Book() {
         <h1 className="text-2xl font-bold text-white">Book a Ride</h1>
         <p className="text-[#a7b0c0] text-sm mt-1 flex items-center gap-1.5">
           <CalendarDays size={14} />
-          Select your date below — you can book up to 2 days in advance
+          Book for today or tomorrow — all times based on Jordan timezone
         </p>
       </div>
 
@@ -202,7 +216,7 @@ export default function Book() {
               {/* Date Chips */}
               <div>
                 <p className="text-xs text-[#a7b0c0] font-medium uppercase tracking-wider mb-2">Date</p>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {dateOptions.map((opt) => {
                     const isSelected = selectedDate === opt.value;
                     return (

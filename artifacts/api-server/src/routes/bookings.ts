@@ -13,6 +13,19 @@ const router: IRouter = Router();
 
 const MAX_CAPACITY = 15;
 
+// Jordan timezone (Asia/Amman) date helpers
+function getJordanDateISO(offsetDays = 0): string {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Amman" }).format(new Date());
+  if (offsetDays === 0) return today;
+  const base = new Date(`${today}T12:00:00Z`);
+  base.setUTCDate(base.getUTCDate() + offsetDays);
+  return base.toISOString().split("T")[0];
+}
+
+function isAllowedJordanDate(date: string): boolean {
+  return date === getJordanDateISO(0) || date === getJordanDateISO(1);
+}
+
 // ─── Mock notification sender ────────────────────────────────────────────────
 async function sendNotification(userId: number, message: string, type = "booking_update") {
   await db.insert(notificationsTable).values({
@@ -155,6 +168,12 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
   }
   if (trip.status === "canceled") {
     res.status(400).json({ error: "Cannot book a canceled trip" });
+    return;
+  }
+
+  // Enforce Jordan timezone date restriction: only today and tomorrow are bookable
+  if (!isAllowedJordanDate(trip.date)) {
+    res.status(400).json({ error: "Bookings are only allowed for today or tomorrow (Jordan timezone, Asia/Amman)." });
     return;
   }
 

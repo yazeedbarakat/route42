@@ -24,6 +24,21 @@ function isValidDate(d: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(Date.parse(d));
 }
 
+// Jordan timezone (Asia/Amman, UTC+3) date helpers
+function getJordanDateISO(offsetDays = 0): string {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Amman" }).format(new Date());
+  if (offsetDays === 0) return today;
+  const base = new Date(`${today}T12:00:00Z`);
+  base.setUTCDate(base.getUTCDate() + offsetDays);
+  return base.toISOString().split("T")[0];
+}
+
+function isAllowedJordanDate(date: string): boolean {
+  const today = getJordanDateISO(0);
+  const tomorrow = getJordanDateISO(1);
+  return date === today || date === tomorrow;
+}
+
 async function broadcastScheduleNotification(): Promise<void> {
   const students = await db
     .select({ id: usersTable.id })
@@ -82,6 +97,11 @@ router.post("/admin/timeslots", requireAuth, requireRole("admin"), async (req, r
   }
   if (typeof rawDate !== "string" || !isValidDate(rawDate)) {
     res.status(400).json({ error: "date must be a valid YYYY-MM-DD string." });
+    return;
+  }
+
+  if (!isAllowedJordanDate(rawDate)) {
+    res.status(400).json({ error: "Date must be today or tomorrow (Jordan timezone, Asia/Amman). Scheduling beyond tomorrow is not allowed." });
     return;
   }
 

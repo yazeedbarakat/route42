@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "wouter";
 import { useEffect, useState, useCallback } from "react";
-import { format, addDays } from "date-fns";
 import {
   Truck, Users, MapPin, Clock, Moon, Map,
   CheckCircle2, XCircle, ChevronDown, ChevronUp,
@@ -37,14 +36,22 @@ interface DriverTripToday {
 }
 
 // ─── Date helpers ──────────────────────────────────────────────────────────────
+function getJordanDateISO(offsetDays = 0): string {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Amman" }).format(new Date());
+  if (offsetDays === 0) return today;
+  const base = new Date(`${today}T12:00:00Z`);
+  base.setUTCDate(base.getUTCDate() + offsetDays);
+  return base.toISOString().split("T")[0];
+}
+
 function getDateOptions() {
-  const today = new Date();
-  return [0, 1, 2].map(offset => {
-    const d = addDays(today, offset);
+  return [0, 1].map(offset => {
+    const iso = getJordanDateISO(offset);
+    const d = new Date(`${iso}T12:00:00Z`);
     return {
-      iso: format(d, "yyyy-MM-dd"),
-      label: offset === 0 ? "Today" : offset === 1 ? "Tomorrow" : "Day After",
-      display: format(d, "EEE, MMM d"),
+      iso,
+      label: offset === 0 ? "Today" : "Tomorrow",
+      display: d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" }),
     };
   });
 }
