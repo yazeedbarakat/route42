@@ -8,24 +8,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-function FortyTwoIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="42">
-      <text
-        x="50%"
-        y="50%"
-        dominantBaseline="central"
-        textAnchor="middle"
-        fill="white"
-        fontFamily="Inter, ui-sans-serif, system-ui, sans-serif"
-        fontWeight="800"
-        fontSize="11"
-        letterSpacing="-0.5"
-      >42</text>
-    </svg>
-  );
-}
-
 const NAV_LINKS = {
   student: [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -88,11 +70,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         >
           <Menu size={20} />
         </button>
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-md bg-gradient-to-br from-[#ff2e88] to-[#7c3aed] flex items-center justify-center">
-            <FortyTwoIcon size={14} />
-          </div>
-          <span className="font-semibold text-sm theme-text">42 transportation</span>
+        <div className="flex items-center">
+          <img src="/route42-logo-orig.png" alt="route42" className="w-24 h-auto object-contain" style={{ mixBlendMode: "screen" }} />
         </div>
         <Link href="/notifications" className="relative p-2 rounded-lg theme-sidebar-item transition-colors">
           <Bell size={20} />
@@ -122,14 +101,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       `}>
         {/* Logo */}
         <div className="flex items-center justify-between px-5 h-16 theme-border-b">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#ff2e88] to-[#7c3aed] flex items-center justify-center shadow-lg glow-pink">
-              <FortyTwoIcon size={16} />
-            </div>
-            <div>
-              <div className="text-sm font-bold theme-text leading-none">42 transportation</div>
-              <div className="text-[10px] theme-text-muted mt-0.5">42 Irbid</div>
-            </div>
+          <div className="flex items-center">
+            <img src="/route42-logo-orig.png" alt="route42" className="w-28 h-auto object-contain" style={{ mixBlendMode: "screen" }} />
           </div>
           <button
             onClick={() => setSidebarOpen(false)}

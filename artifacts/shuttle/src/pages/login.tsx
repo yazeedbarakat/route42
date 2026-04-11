@@ -3,7 +3,7 @@ import { useLocation, useSearch } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useLogin, useRegister, useDriverLogin } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
-import { Bus, Mail, Lock, User, ChevronRight, Loader2, Phone, Hash } from "lucide-react";
+import { Mail, Lock, User, ChevronRight, Loader2, Phone, Hash } from "lucide-react";
 
 type UserRole = "student" | "admin";
 
@@ -167,10 +167,12 @@ export default function Login() {
       <div className="w-full max-w-md relative z-10">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-[#ff2e88] to-[#7c3aed] mb-4 shadow-xl glow-pink">
-            <Bus size={28} className="text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-white mb-1">Smart Shuttle Solution</h1>
+          <img
+            src="/route42-logo-orig.png"
+            alt="route42"
+            className="w-72 h-auto mx-auto mb-3 object-contain"
+            style={{ mixBlendMode: "screen" }}
+          />
           <p className="text-[#a7b0c0] text-sm">42 Irbid — Ride Booking Platform</p>
         </div>
 
