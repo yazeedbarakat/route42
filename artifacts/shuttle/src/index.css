@@ -152,90 +152,6 @@
   --app-input-bg:      rgba(255, 255, 255, 0.04);
 }
 
-/* ── Light Theme ───────────────────────────────────────────────────── */
-/*
- * Palette (exact hex codes from design spec):
- *   #F9F7F7  bg-main    — main application background
- *   #DBE2EF  bg-surface — sidebar, cards, secondary containers
- *   #3F72AF  primary    — action buttons, active links, highlights
- *   #112D4E  text-main  — primary text, headings, inactive icons
- *
- * HSL conversions (for shadcn hsl() variables):
- *   #F9F7F7  →  0   11%  97%
- *   #DBE2EF  →  219 38%  90%
- *   #3F72AF  →  213 47%  47%
- *   #112D4E  →  213 64%  19%
- */
-[data-theme="light"] {
-  /* ── Shadcn/ui semantic variables ── */
-  --background:              0   11%  97%;   /* #F9F7F7 */
-  --foreground:              213 64%  19%;   /* #112D4E */
-
-  --card:                    219 38%  90%;   /* #DBE2EF */
-  --card-foreground:         213 64%  19%;   /* #112D4E */
-  --card-border:             219 28%  82%;   /* slightly deeper than surface */
-
-  --popover:                 219 38%  90%;   /* #DBE2EF */
-  --popover-foreground:      213 64%  19%;   /* #112D4E */
-  --popover-border:          219 28%  82%;
-
-  --sidebar:                 219 38%  90%;   /* #DBE2EF */
-  --sidebar-foreground:      213 64%  19%;   /* #112D4E */
-  --sidebar-border:          219 28%  82%;
-
-  /* Primary → #3F72AF, foreground on primary → #F9F7F7 */
-  --primary:                 213 47%  47%;   /* #3F72AF */
-  --primary-foreground:      0   11%  97%;   /* #F9F7F7 — readable on blue */
-
-  --secondary:               219 38%  84%;   /* slightly deeper than surface */
-  --secondary-foreground:    213 64%  19%;   /* #112D4E */
-
-  --muted:                   219 30%  93%;   /* between bg and surface */
-  --muted-foreground:        213 35%  42%;   /* muted version of text-main */
-
-  --accent:                  213 47%  47%;   /* same as primary */
-  --accent-foreground:       0   11%  97%;   /* #F9F7F7 */
-
-  --destructive:             0   84%  60%;   /* keep red unchanged */
-  --destructive-foreground:  0   0%   100%;
-
-  --border:                  219 28%  82%;
-  --input:                   219 28%  84%;
-  --ring:                    213 47%  47%;   /* #3F72AF focus ring */
-
-  /* Sidebar-specific shadcn tokens */
-  --sidebar-primary:             213 47%  47%;   /* #3F72AF */
-  --sidebar-primary-foreground:  0   11%  97%;   /* #F9F7F7 */
-  --sidebar-accent:              213 47%  47%;
-  --sidebar-accent-foreground:   0   11%  97%;
-  --sidebar-ring:                213 47%  47%;
-
-  /* ── App structural tokens (used by .theme-* CSS classes) ── */
-  --app-bg:            #F9F7F7;
-  --app-surface:       #DBE2EF;
-  --app-surface-2:     #DBE2EF;
-  --app-surface-hover: rgba(63, 114, 175, 0.12);  /* #3F72AF tint */
-  --app-border:        rgba(17,  45,  78,  0.13);  /* #112D4E tint */
-  --app-text:          #112D4E;
-  --app-text-muted:    rgba(17, 45, 78, 0.55);
-  --app-text-hover:    #112D4E;
-  --app-input-bg:      rgba(17, 45, 78, 0.04);
-
-  /* ── Elevation / shadows ── */
-  --elevate-1: rgba(63, 114, 175, 0.06);
-  --elevate-2: rgba(63, 114, 175, 0.12);
-  --shadow-sm: 0 1px 3px 0 rgb(17 45 78 / 0.08);
-  --shadow:    0 4px 16px 0 rgb(17 45 78 / 0.08);
-  --shadow-md: 0 8px 24px 0 rgb(17 45 78 / 0.10);
-  --shadow-lg: 0 16px 40px 0 rgb(17 45 78 / 0.12);
-}
-
-/* Active sidebar nav item in light mode → #3F72AF highlight */
-[data-theme="light"] .theme-nav-active {
-  background-color: rgba(63, 114, 175, 0.15);
-  color: #3F72AF;
-  border-color: rgba(63, 114, 175, 0.28);
-}
 
 .dark {
   --background: 220 45% 7%;
@@ -323,12 +239,6 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 46, 136, 0.4);
-}
-[data-theme="light"] ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.12);
-}
-[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 46, 136, 0.5);
 }
 
 /* Status badge animations */

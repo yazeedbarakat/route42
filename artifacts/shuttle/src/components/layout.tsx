@@ -7,7 +7,6 @@ import {
   ChevronRight, Menu, X, UsersRound, MapPin, CalendarClock, UserCog
 } from "lucide-react";
 import { useState } from "react";
-import { ThemeSwitcher } from "@/components/theme-switcher";
 
 function FortyTwoIcon({ size = 16 }: { size?: number }) {
   return (
@@ -186,7 +185,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Bottom actions */}
         <div className="px-3 py-4 theme-border-t space-y-1">
-          <ThemeSwitcher />
           <Link href="/notifications" onClick={() => setSidebarOpen(false)}>
             <div className="theme-sidebar-item flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all cursor-pointer">
               <Bell size={17} />
