@@ -21,19 +21,3 @@ A shuttle booking system for 42 Irbid students.
 - **Database:** PostgreSQL (Neon)
 - **Deployment:** Railway
 
-## Running locally
-
-```bash
-# Install dependencies
-pnpm install
-
-# Set up environment variables
-cp artifacts/api-server/.env.example artifacts/api-server/.env
-# Fill in DATABASE_URL, SESSION_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
-
-# Start the API server
-pnpm --filter @workspace/api-server run dev
-
-# In a separate terminal, start the frontend
-PORT=5173 BASE_PATH=/ pnpm --filter @workspace/shuttle run dev
-```
