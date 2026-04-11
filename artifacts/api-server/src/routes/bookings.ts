@@ -12,8 +12,9 @@ import {
 const router: IRouter = Router();
 
 const MAX_CAPACITY = 15;
+const CANCEL_WINDOW_MINUTES = 15;
 
-// Jordan timezone (Asia/Amman) date helpers
+// ─── Jordan timezone helpers ──────────────────────────────────────────────────
 function getJordanDateISO(offsetDays = 0): string {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Amman" }).format(new Date());
   if (offsetDays === 0) return today;
@@ -24,6 +25,51 @@ function getJordanDateISO(offsetDays = 0): string {
 
 function isAllowedJordanDate(date: string): boolean {
   return date === getJordanDateISO(0) || date === getJordanDateISO(1);
+}
+
+/**
+ * Convert a trip's date + departureTime strings (Jordan local) into a UTC timestamp.
+ * departureTime is in "HH:MM AM/PM" format, date is "YYYY-MM-DD" (Jordan calendar).
+ */
+function departureToUtcMs(dateStr: string, departureTimeStr: string): number {
+  const match = departureTimeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return NaN;
+
+  let h = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  const meridiem = match[3].toUpperCase();
+  if (meridiem === "PM" && h !== 12) h += 12;
+  if (meridiem === "AM" && h === 12) h = 0;
+
+  // Determine Jordan's UTC offset on the trip date by checking noon UTC
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const refDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+
+  const jordanNoonHour = parseInt(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Amman",
+      hour: "numeric",
+      hour12: false,
+    }).format(refDate),
+    10,
+  );
+  const jordanOffsetHours = jordanNoonHour - 12; // e.g. 2 for UTC+2, 3 for UTC+3
+
+  // Jordan departure local → UTC
+  const utcH = h - jordanOffsetHours;
+  return Date.UTC(year, month - 1, day, utcH, m, 0);
+}
+
+/**
+ * Returns true if the student is still within the cancellation window
+ * (departure is ≥ 15 minutes from now in Jordan time).
+ */
+function isCancellationAllowed(trip: { date: string; departureTime: string }): boolean {
+  const nowMs = Date.now();
+  const departureMs = departureToUtcMs(trip.date, trip.departureTime);
+  if (isNaN(departureMs)) return true; // allow if unparseable (fail open)
+  const minutesUntilDeparture = (departureMs - nowMs) / 60_000;
+  return minutesUntilDeparture >= CANCEL_WINDOW_MINUTES;
 }
 
 // ─── Mock notification sender ────────────────────────────────────────────────
@@ -88,7 +134,6 @@ async function promoteWaitingBooking(tripId: number) {
   const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId));
   if (!trip) return;
 
-  // Find the earliest "waiting" booking for this trip
   const [firstWaiting] = await db
     .select()
     .from(bookingsTable)
@@ -98,7 +143,6 @@ async function promoteWaitingBooking(tripId: number) {
 
   if (!firstWaiting) return;
 
-  // Determine promoted status
   const newStatus = trip.bookedSeats >= trip.minBookingsToConfirm ? "confirmed" : "pending";
 
   await db
@@ -106,7 +150,6 @@ async function promoteWaitingBooking(tripId: number) {
     .set({ status: newStatus })
     .where(eq(bookingsTable.id, firstWaiting.id));
 
-  // Increment seat count
   await db
     .update(tripsTable)
     .set({ bookedSeats: trip.bookedSeats + 1 })
@@ -115,28 +158,97 @@ async function promoteWaitingBooking(tripId: number) {
   await sendNotification(
     firstWaiting.userId,
     `Your ride is confirmed! A seat opened up for the ${trip.date} ${trip.departureTime} shuttle. You've been moved from the waiting list.`,
-    "booking_update"
+    "booking_update",
   );
 }
 
-router.get("/bookings", requireAuth, async (req, res): Promise<void> => {
-  const parsed = GetBookingsQueryParams.safeParse(req.query);
+// ─── Shared cancel logic ──────────────────────────────────────────────────────
+async function performCancel(
+  bookingId: number,
+  requestingUserId: number,
+  requestingRole: string,
+  res: any,
+): Promise<void> {
+  const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, bookingId));
+  if (!booking) {
+    res.status(404).json({ error: "Booking not found" });
+    return;
+  }
+  if (booking.userId !== requestingUserId && requestingRole !== "admin") {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  if (booking.status === "canceled") {
+    res.status(400).json({ error: "Booking is already canceled" });
+    return;
+  }
 
-  let query = db
+  // ── 15-minute cancellation window check (students only) ───────────────────
+  if (requestingRole === "student") {
+    const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, booking.tripId));
+    if (trip && !isCancellationAllowed(trip)) {
+      res.status(400).json({
+        error: "Cancellation window closed. You can only cancel up to 15 minutes before departure.",
+      });
+      return;
+    }
+  }
+
+  const wasActive = booking.status !== "waiting";
+
+  const [updated] = await db
+    .update(bookingsTable)
+    .set({ status: "canceled" })
+    .where(eq(bookingsTable.id, bookingId))
+    .returning();
+
+  if (wasActive) {
+    const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, booking.tripId));
+    if (trip) {
+      await db
+        .update(tripsTable)
+        .set({ bookedSeats: Math.max(0, trip.bookedSeats - 1) })
+        .where(eq(tripsTable.id, booking.tripId));
+
+      await promoteWaitingBooking(booking.tripId);
+
+      // Notify the assigned driver if the trip was confirmed and a driver exists
+      const driver = await db
+        .select()
+        .from(usersTable)
+        .where(and(eq(usersTable.role, "driver")));
+
+      if (driver.length > 0 && trip.status === "confirmed") {
+        for (const d of driver) {
+          await sendNotification(
+            d.id,
+            `A student cancelled their booking for the ${trip.date} ${trip.departureTime} trip. Seat count updated.`,
+            "booking_update",
+          );
+        }
+      }
+    }
+  }
+
+  res.json(await formatBooking(updated));
+}
+
+// ─── GET /bookings ────────────────────────────────────────────────────────────
+router.get("/bookings", requireAuth, async (req, res): Promise<void> => {
+  GetBookingsQueryParams.safeParse(req.query);
+
+  const bookings = await db
     .select()
     .from(bookingsTable)
     .where(eq(bookingsTable.userId, req.user!.userId))
-    .orderBy(desc(bookingsTable.createdAt))
-    .$dynamic();
+    .orderBy(desc(bookingsTable.createdAt));
 
-  const bookings = await query;
   const result = [];
-  for (const b of bookings) {
-    result.push(await formatBooking(b));
-  }
+  for (const b of bookings) result.push(await formatBooking(b));
   res.json(result);
 });
 
+// ─── GET /bookings/history ────────────────────────────────────────────────────
 router.get("/bookings/history", requireAuth, async (req, res): Promise<void> => {
   const bookings = await db
     .select()
@@ -145,12 +257,11 @@ router.get("/bookings/history", requireAuth, async (req, res): Promise<void> => 
     .orderBy(desc(bookingsTable.createdAt));
 
   const result = [];
-  for (const b of bookings) {
-    result.push(await formatBooking(b));
-  }
+  for (const b of bookings) result.push(await formatBooking(b));
   res.json(result);
 });
 
+// ─── POST /bookings ───────────────────────────────────────────────────────────
 router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateBookingBody.safeParse(req.body);
   if (!parsed.success) {
@@ -160,7 +271,6 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
 
   const { tripId, pickupType, pickupPointId, pickupName, customLat, customLng } = parsed.data;
 
-  // Check trip exists
   const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, tripId));
   if (!trip) {
     res.status(400).json({ error: "Trip not found" });
@@ -171,30 +281,21 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  // Enforce Jordan timezone date restriction: only today and tomorrow are bookable
   if (!isAllowedJordanDate(trip.date)) {
     res.status(400).json({ error: "Bookings are only allowed for today or tomorrow (Jordan timezone, Asia/Amman)." });
     return;
   }
 
-  // Check if user already has an active booking for this trip
   const [existing] = await db
     .select()
     .from(bookingsTable)
-    .where(
-      and(
-        eq(bookingsTable.userId, req.user!.userId),
-        eq(bookingsTable.tripId, tripId)
-      )
-    );
+    .where(and(eq(bookingsTable.userId, req.user!.userId), eq(bookingsTable.tripId, tripId)));
 
   if (existing && existing.status !== "canceled") {
     res.status(400).json({ error: "You already have a booking for this trip" });
     return;
   }
 
-  // Guard: one booking per direction per calendar date
-  // Join bookings → trips to find any active (non-canceled) booking on the same date + direction
   const conflictingRows = await db
     .select({ status: bookingsTable.status })
     .from(bookingsTable)
@@ -202,10 +303,10 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
     .where(
       and(
         eq(bookingsTable.userId, req.user!.userId),
-        eq(tripsTable.date, trip.date),          // YYYY-MM-DD only — no time component
-        eq(tripsTable.direction, trip.direction), // to_school | from_school
-        ne(bookingsTable.status, "canceled")      // ignore canceled bookings
-      )
+        eq(tripsTable.date, trip.date),
+        eq(tripsTable.direction, trip.direction),
+        ne(bookingsTable.status, "canceled"),
+      ),
     );
 
   if (conflictingRows.length > 0) {
@@ -216,7 +317,6 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  // Resolve pickup: for "fixed" validate the DB record; for "custom" accept lat/lng directly
   let resolvedPickupPointId: number | null = null;
   if (pickupType === "fixed") {
     if (!pickupPointId) {
@@ -230,14 +330,12 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
     }
     resolvedPickupPointId = pickupPointId;
   } else {
-    // custom — coordinates must be provided
     if (customLat == null || customLng == null) {
       res.status(400).json({ error: "customLat and customLng are required for custom pickup" });
       return;
     }
   }
 
-  // Determine status: waiting list if at or over MAX_CAPACITY
   const isWaiting = trip.bookedSeats >= MAX_CAPACITY;
   const bookingStatus = isWaiting ? "waiting" : "pending";
 
@@ -256,31 +354,25 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
     .returning();
 
   if (!isWaiting) {
-    // Increment seat count only for active (non-waiting) bookings
     const newBookedSeats = trip.bookedSeats + 1;
     await db
       .update(tripsTable)
       .set({ bookedSeats: newBookedSeats })
       .where(eq(tripsTable.id, tripId));
 
-    // Auto-confirm: if the minimum threshold is met (either just reached or trip already confirmed),
-    // promote ALL pending bookings for this trip (including the one just created) to "confirmed".
     if (newBookedSeats >= trip.minBookingsToConfirm) {
       if (trip.status === "pending") {
-        // Promote the trip itself to confirmed
         await db
           .update(tripsTable)
           .set({ status: "confirmed" })
           .where(eq(tripsTable.id, tripId));
       }
 
-      // Grab every pending booking (includes the newly inserted one)
       const pendingBookings = await db
         .select()
         .from(bookingsTable)
         .where(and(eq(bookingsTable.tripId, tripId), eq(bookingsTable.status, "pending")));
 
-      // Bulk-update them all to confirmed
       await db
         .update(bookingsTable)
         .set({ status: "confirmed" })
@@ -290,23 +382,21 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
         await sendNotification(
           pb.userId,
           `TRIP CONFIRMED: Your shuttle booking for ${trip.date} at ${trip.departureTime} is now confirmed. Be at your pickup point on time.`,
-          "trip_confirmed"
+          "trip_confirmed",
         );
       }
     } else {
-      // Below the threshold — booking stays pending, notify the user
       await sendNotification(
         req.user!.userId,
         `Booking received for ${trip.date} at ${trip.departureTime}. You're on the list — trip confirms when enough riders join.`,
-        "booking_update"
+        "booking_update",
       );
     }
   } else {
-    // Notify the user they are on the waiting list
     await sendNotification(
       req.user!.userId,
       `You're on the waiting list for ${trip.date} at ${trip.departureTime}. We'll notify you immediately if a seat opens up.`,
-      "booking_update"
+      "booking_update",
     );
   }
 
@@ -314,6 +404,7 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json(await formatBooking(freshBooking));
 });
 
+// ─── GET /bookings/:id ────────────────────────────────────────────────────────
 router.get("/bookings/:id", requireAuth, async (req, res): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
@@ -335,52 +426,27 @@ router.get("/bookings/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(await formatBooking(booking));
 });
 
+// ─── PATCH /bookings/:id/cancel — student self-cancel with 15-min window ─────
+router.patch("/bookings/:id/cancel", requireAuth, async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ error: "Invalid booking ID" });
+    return;
+  }
+  await performCancel(id, req.user!.userId, req.user!.role, res);
+});
+
+// ─── DELETE /bookings/:id — legacy cancel (keeps backward compat) ─────────────
 router.delete("/bookings/:id", requireAuth, async (req, res): Promise<void> => {
   const params = CancelBookingParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
-
-  const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, params.data.id));
-  if (!booking) {
-    res.status(404).json({ error: "Booking not found" });
-    return;
-  }
-  if (booking.userId !== req.user!.userId && req.user!.role !== "admin") {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
-  if (booking.status === "canceled") {
-    res.status(400).json({ error: "Booking is already canceled" });
-    return;
-  }
-
-  const wasActive = booking.status !== "waiting";
-
-  const [updated] = await db
-    .update(bookingsTable)
-    .set({ status: "canceled" })
-    .where(eq(bookingsTable.id, params.data.id))
-    .returning();
-
-  if (wasActive) {
-    // Decrement seat count and promote next waiting user (FIFO)
-    const [trip] = await db.select().from(tripsTable).where(eq(tripsTable.id, booking.tripId));
-    if (trip) {
-      await db
-        .update(tripsTable)
-        .set({ bookedSeats: Math.max(0, trip.bookedSeats - 1) })
-        .where(eq(tripsTable.id, booking.tripId));
-
-      await promoteWaitingBooking(booking.tripId);
-    }
-  }
-
-  res.json(await formatBooking(updated));
+  await performCancel(params.data.id, req.user!.userId, req.user!.role, res);
 });
 
-// Admin-only bookings view
+// ─── Admin bookings view ──────────────────────────────────────────────────────
 router.get("/admin/bookings", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
   const parsed = GetAdminBookingsQueryParams.safeParse(req.query);
 
@@ -394,9 +460,7 @@ router.get("/admin/bookings", requireAuth, requireRole("admin"), async (req, res
   }
 
   const result = [];
-  for (const b of allBookings) {
-    result.push(await formatBooking(b));
-  }
+  for (const b of allBookings) result.push(await formatBooking(b));
   res.json(result);
 });
 

@@ -1,9 +1,26 @@
-import { useGetBookings } from "@workspace/api-client-react";
+import { useState } from "react";
+import { useGetBookings, useCancelBooking, getGetDashboardStatsQueryKey, getGetTripDemandQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { Link, useLocation } from "wouter";
 import { useEffect } from "react";
 import { format } from "date-fns";
-import { CalendarPlus, Map, Clock, MapPin, CheckCircle2, AlertCircle, ArrowRight, Zap } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { CalendarPlus, Map, Clock, MapPin, CheckCircle2, AlertCircle, ArrowRight, Zap, XCircle } from "lucide-react";
+import { CancelBookingModal } from "@/components/cancel-booking-modal";
+import { canCancelBooking, minutesUntilDeparture } from "@/lib/cancel-utils";
+
+type BookingItem = {
+  id: number;
+  status: string;
+  pickupType?: string;
+  pickupName?: string | null;
+  pickupPoint?: { name: string } | null;
+  trip?: {
+    date: string;
+    departureTime: string;
+  } | null;
+};
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "confirmed") return (
@@ -16,9 +33,14 @@ function StatusBadge({ status }: { status: string }) {
       <AlertCircle size={11} />Pending
     </span>
   );
+  if (status === "waiting") return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-400/10 text-blue-400 border border-blue-400/20">
+      <Clock size={11} />Waiting
+    </span>
+  );
   return (
     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-400/10 text-red-400 border border-red-400/20">
-      Cancelled
+      <XCircle size={11} />Cancelled
     </span>
   );
 }
@@ -26,21 +48,56 @@ function StatusBadge({ status }: { status: string }) {
 export default function Dashboard() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const [cancelTarget, setCancelTarget] = useState<BookingItem | null>(null);
 
   useEffect(() => {
     if (!user) setLocation("/");
     else if (user.role !== "student") setLocation(user.role === "admin" ? "/admin" : "/driver");
   }, [user, setLocation]);
 
-  const { data: bookings, isLoading } = useGetBookings();
+  const { data: bookings, isLoading, refetch } = useGetBookings();
+  const cancelMutation = useCancelBooking();
+
   if (!user) return null;
 
-  const upcomingBookings = bookings?.filter(b => b.status === "pending" || b.status === "confirmed") || [];
+  const upcomingBookings = bookings?.filter(
+    b => b.status === "pending" || b.status === "confirmed" || b.status === "waiting"
+  ) || [];
   const confirmedCount = bookings?.filter(b => b.status === "confirmed").length || 0;
-  const pendingCount = bookings?.filter(b => b.status === "pending").length || 0;
+  const pendingCount   = bookings?.filter(b => b.status === "pending").length || 0;
+
+  const handleCancelConfirm = async () => {
+    if (!cancelTarget) return;
+    try {
+      await cancelMutation.mutateAsync({ id: cancelTarget.id });
+      toast({ title: "Booking cancelled", description: "Your booking has been successfully cancelled." });
+      refetch();
+      // Silently revalidate admin caches so their view updates
+      queryClient.invalidateQueries({ queryKey: getGetDashboardStatsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetTripDemandQueryKey() });
+    } catch (err: any) {
+      const msg = err?.data?.error ?? err?.message ?? "Please try again.";
+      toast({ title: "Cancellation failed", description: msg, variant: "destructive" });
+    } finally {
+      setCancelTarget(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
+      {/* Confirmation modal */}
+      <CancelBookingModal
+        open={!!cancelTarget}
+        onClose={() => setCancelTarget(null)}
+        onConfirm={handleCancelConfirm}
+        isPending={cancelMutation.isPending}
+        departureTime={cancelTarget?.trip?.departureTime}
+        date={cancelTarget?.trip?.date}
+      />
+
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-white">
@@ -133,29 +190,75 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="space-y-3">
-              {upcomingBookings.map((booking) => (
-                <div key={booking.id} className="flex items-center gap-4 p-3 rounded-lg bg-white/[0.03] border border-white/[0.05] hover:border-white/[0.1] transition-colors">
-                  <div className="w-10 h-10 rounded-lg bg-[#ff2e88]/10 border border-[#ff2e88]/20 flex items-center justify-center shrink-0">
-                    <Clock size={16} className="text-[#ff2e88]" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-white font-mono">{booking.trip?.departureTime}</span>
-                      <span className="text-[#a7b0c0] text-xs">·</span>
-                      <span className="text-xs text-[#a7b0c0]">{format(new Date(booking.trip?.date || ""), "MMM d")}</span>
+              {upcomingBookings.map((booking) => {
+                const trip = booking.trip;
+                const cancellable = trip ? canCancelBooking(trip) : false;
+                const minsLeft = trip ? minutesUntilDeparture(trip) : Infinity;
+                const isCancellableStatus = booking.status === "pending" || booking.status === "confirmed" || booking.status === "waiting";
+
+                return (
+                  <div
+                    key={booking.id}
+                    className="flex items-center gap-4 p-3 rounded-lg bg-white/[0.03] border border-white/[0.05] hover:border-white/[0.1] transition-colors"
+                  >
+                    <div className="w-10 h-10 rounded-lg bg-[#ff2e88]/10 border border-[#ff2e88]/20 flex items-center justify-center shrink-0">
+                      <Clock size={16} className="text-[#ff2e88]" />
                     </div>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <MapPin size={11} className="text-[#a7b0c0]" />
-                      <span className="text-xs text-[#a7b0c0] truncate">
-                        {booking.pickupType === "fixed"
-                          ? (booking.pickupName || booking.pickupPoint?.name || "Fixed Pickup")
-                          : "Custom Pickup"}
-                      </span>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-white font-mono">{trip?.departureTime}</span>
+                        <span className="text-[#a7b0c0] text-xs">·</span>
+                        <span className="text-xs text-[#a7b0c0]">
+                          {trip?.date ? format(new Date(trip.date), "MMM d") : "—"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <MapPin size={11} className="text-[#a7b0c0]" />
+                        <span className="text-xs text-[#a7b0c0] truncate">
+                          {booking.pickupType === "fixed"
+                            ? (booking.pickupName || booking.pickupPoint?.name || "Fixed Pickup")
+                            : "Custom Pickup"}
+                        </span>
+                      </div>
+                      {/* Cancellation window warning */}
+                      {isCancellableStatus && !cancellable && minsLeft > -60 && (
+                        <p className="text-[10px] text-red-400/80 mt-1">
+                          Cancellation no longer available.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <StatusBadge status={booking.status} />
+
+                      {/* Cancel button — only for active bookings */}
+                      {isCancellableStatus && (
+                        <div className="relative group/tip">
+                          <button
+                            onClick={() => cancellable && setCancelTarget(booking as BookingItem)}
+                            disabled={!cancellable || cancelMutation.isPending}
+                            className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
+                              cancellable
+                                ? "border-red-400/30 text-red-400 hover:bg-red-400/10 cursor-pointer"
+                                : "border-white/[0.06] text-[#a7b0c0]/40 cursor-not-allowed"
+                            }`}
+                          >
+                            Cancel
+                          </button>
+                          {!cancellable && (
+                            <div className="absolute bottom-full right-0 mb-1.5 hidden group-hover/tip:block z-20 pointer-events-none">
+                              <div className="bg-[#1a2035] border border-white/[0.1] rounded-lg px-3 py-2 text-[11px] text-[#a7b0c0] whitespace-nowrap shadow-xl">
+                                Cancellation no longer available.
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <StatusBadge status={booking.status} />
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
