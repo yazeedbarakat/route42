@@ -9,7 +9,7 @@ import { useLocation, Link } from "wouter";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Users, CalendarCheck, Clock, TrendingUp, CheckCircle2, AlertCircle,
+  Users, CalendarCheck, Clock, CheckCircle2, AlertCircle,
   XCircle, ArrowRight, Loader2, BarChart3, Shield, Map, ChevronRight,
 } from "lucide-react";
 import { RouteMap } from "@/components/route-map";
@@ -160,6 +160,7 @@ export default function AdminDashboard() {
 
   if (!user) return null;
 
+  const todayLabel = new Date().toLocaleString("en-CA", { timeZone: "Asia/Amman" }).split(",")[0].trim();
   const allTrips = demand ?? [];
   const tripsWithDemand = allTrips.filter(trip => trip.bookingCount > 0);
   const totalCustomPickups = hotspots.reduce((sum, h) => sum + h.totalUsage, 0);
@@ -191,16 +192,12 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* ── Stats grid — all 8 cards clickable ── */}
+      {/* ── Stats grid ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Students"  value={stats?.totalStudents}                                                   icon={Users}         color="cyan"    loading={statsLoading} onClick={() => setActiveCard("totalStudents")}  />
-        <StatCard label="Bookings Today"  value={stats?.bookingsToday}                                                     icon={CalendarCheck} color="pink"    loading={statsLoading} onClick={() => setActiveCard("bookingsToday")}  />
-        <StatCard label="Confirmed Trips" value={stats?.confirmedTrips}                                                    icon={CheckCircle2}  color="emerald" loading={statsLoading} onClick={() => setActiveCard("confirmedTrips")} />
-        <StatCard label="Pending Trips"   value={stats?.pendingTrips}                                                      icon={Clock}         color="amber"   loading={statsLoading} onClick={() => setActiveCard("pendingTrips")}   />
-        <StatCard label="Trips This Week" value={stats?.tripsThisWeek}                                                     icon={BarChart3}     color="purple"  loading={statsLoading} onClick={() => setActiveCard("tripsThisWeek")}  />
-        <StatCard label="Avg Occupancy"   value={stats?.avgOccupancy !== undefined ? `${stats.avgOccupancy}%` : undefined} icon={TrendingUp}    color="blue"    loading={statsLoading} onClick={() => setActiveCard("avgOccupancy")}  />
-        <StatCard label="Peak Time"       value={stats?.peakTime ?? "—"}                                                   icon={Clock}         color="amber"   loading={statsLoading} onClick={() => setActiveCard("peakTime")}      />
-        <StatCard label="Efficiency"      value={stats?.efficiency !== undefined ? `${stats.efficiency}%` : undefined}     icon={TrendingUp}    color="emerald" loading={statsLoading} onClick={() => setActiveCard("efficiency")}    />
+        <StatCard label="Total Students"  value={stats?.totalStudents}    icon={Users}         color="cyan"    loading={statsLoading} onClick={() => setLocation("/admin/students")}  />
+        <StatCard label="Bookings Today"  value={stats?.bookingsToday}    icon={CalendarCheck} color="pink"    loading={statsLoading} onClick={() => setActiveCard("bookingsToday")}  />
+        <StatCard label="Confirmed Trips" value={stats?.confirmedTrips}   icon={CheckCircle2}  color="emerald" loading={statsLoading} onClick={() => setActiveCard("confirmedTrips")} />
+        <StatCard label="Peak Time"       value={stats?.peakTime ?? "—"} icon={Clock}         color="amber"   loading={statsLoading} onClick={() => setActiveCard("peakTime")}      />
       </div>
 
       {/* ── Trip demand table ── */}
@@ -227,7 +224,7 @@ export default function AdminDashboard() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/[0.06]">
-                    {["Trip ID", "Departure", "Demand", "Confirmed", "Status", "Actions"].map(h => (
+                    {["Date", "Trip ID", "Departure", "Demand", "Confirmed", "Status", "Actions"].map(h => (
                       <th key={h} className="text-left px-5 py-3 text-xs font-medium text-[#a7b0c0] uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>
@@ -235,8 +232,14 @@ export default function AdminDashboard() {
                 <tbody>
                   {tripsWithDemand.map((trip, idx) => {
                     const fillPct = Math.min(((trip.bookingCount) / (trip.bookingCount + trip.availableSeats)) * 100, 100);
+                    const isToday = trip.date === todayLabel;
                     return (
                       <tr key={trip.tripId} className={`${idx !== tripsWithDemand.length - 1 ? "border-b border-white/[0.04]" : ""} hover:bg-white/[0.02] transition-colors`}>
+                        <td className="px-5 py-4">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${isToday ? "bg-[#22d3ee]/10 text-[#22d3ee] border border-[#22d3ee]/20" : "bg-purple-400/10 text-purple-400 border border-purple-400/20"}`}>
+                            {isToday ? "Today" : "Tomorrow"}
+                          </span>
+                        </td>
                         <td className="px-5 py-4 font-mono text-xs text-[#a7b0c0]">#{trip.tripId}</td>
                         <td className="px-5 py-4">
                           <span className="font-mono font-semibold text-white">{trip.departureTime}</span>
@@ -270,10 +273,16 @@ export default function AdminDashboard() {
             <div className="md:hidden divide-y divide-white/[0.06]">
               {tripsWithDemand.map((trip) => {
                 const fillPct = Math.min(((trip.bookingCount) / (trip.bookingCount + trip.availableSeats)) * 100, 100);
+                const isToday = trip.date === todayLabel;
                 return (
                   <div key={trip.tripId} className="p-4 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="font-mono font-bold text-white text-lg">{trip.departureTime}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-white text-lg">{trip.departureTime}</span>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${isToday ? "bg-[#22d3ee]/10 text-[#22d3ee] border border-[#22d3ee]/20" : "bg-purple-400/10 text-purple-400 border border-purple-400/20"}`}>
+                          {isToday ? "Today" : "Tomorrow"}
+                        </span>
+                      </div>
                       <TripStatusBadge status={trip.status} />
                     </div>
                     <div>

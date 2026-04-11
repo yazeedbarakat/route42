@@ -92,7 +92,10 @@ export default function Book() {
   const [customCoords, setCustomCoords] = useState<[number, number] | null>(null);
   const [isWaitlisted, setIsWaitlisted] = useState(false);
 
-  const { data: trips, isLoading: tripsLoading } = useGetTrips({ date: selectedDate });
+  const { data: trips, isLoading: tripsLoading } = useGetTrips(
+    { date: selectedDate },
+    { query: { refetchInterval: 30_000 } },
+  );
   const { data: pickupPoints } = useGetPickupPoints();
   const { data: myBookings } = useGetBookings();
   const { data: timeSlots = [], isLoading: slotsLoading } = useGetTimeSlots(
@@ -109,6 +112,7 @@ export default function Book() {
   const directionConflict = myBookings?.some(
     (b) =>
       b.status !== "canceled" &&
+      b.status !== "cancelled_by_admin" &&
       b.trip?.date === selectedDate &&          // compare YYYY-MM-DD only
       b.trip?.direction === dbDirection
   ) ?? false;
@@ -143,7 +147,10 @@ export default function Book() {
 
   const matchedTrip = trips?.find(t => {
     const norm = (s: string) => s.replace(/\s/g, "").toUpperCase();
-    return norm(t.departureTime) === norm(selectedTime ?? "");
+    return (
+      norm(t.departureTime) === norm(selectedTime ?? "") &&
+      t.direction === dbDirection
+    );
   });
 
   const willBeWaitlisted = matchedTrip ? matchedTrip.bookedSeats >= MAX_CAPACITY : false;
@@ -297,7 +304,7 @@ export default function Book() {
                     {activeSlots.map((slot) => {
                       const trip = trips?.find(t => {
                         const norm = (s: string) => s.replace(/\s/g, "").toUpperCase();
-                        return norm(t.departureTime) === norm(slot);
+                        return norm(t.departureTime) === norm(slot) && t.direction === dbDirection;
                       });
                       const isFull      = trip ? trip.bookedSeats >= trip.totalSeats : false;
                       const isWaitlist  = trip ? trip.bookedSeats >= MAX_CAPACITY : false;

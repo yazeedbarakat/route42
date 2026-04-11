@@ -496,6 +496,7 @@ export const GetTripDemandQueryParams = zod.object({
 
 export const GetTripDemandResponseItem = zod.object({
   tripId: zod.number(),
+  date: zod.string(),
   departureTime: zod.string(),
   direction: zod.string(),
   bookingCount: zod.number(),

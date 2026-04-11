@@ -6,6 +6,15 @@ import { GetTripsQueryParams, ConfirmTripParams, CancelTripParams } from "@works
 
 const router: IRouter = Router();
 
+// ─── Jordan timezone helper ───────────────────────────────────────────────────
+function getJordanDateISO(offsetDays = 0): string {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Amman" }).format(new Date());
+  if (offsetDays === 0) return today;
+  const base = new Date(`${today}T12:00:00Z`);
+  base.setUTCDate(base.getUTCDate() + offsetDays);
+  return base.toISOString().split("T")[0];
+}
+
 // ─── Default schedule — mirrors the frontend TIME_SLOTS constants ─────────────
 const DEFAULT_SCHEDULE: { time: string; direction: string }[] = [
   { time: "08:00 AM", direction: "to_school"   },
@@ -57,16 +66,20 @@ router.get("/trips", requireAuth, async (req, res): Promise<void> => {
   const parsed = GetTripsQueryParams.safeParse(req.query);
   const date = parsed.success && parsed.data.date ? parsed.data.date : getTomorrow();
 
-  // Only auto-seed for today or future dates
-  const today = new Date().toISOString().split("T")[0];
+  // Only auto-seed for today or future dates (Jordan timezone)
+  const today = getJordanDateISO(0);
   if (date >= today) {
     await seedTripsForDate(date);
   }
 
+  // Exclude canceled trips — students cannot book them and they clutter the UI
   const trips = await db
     .select()
     .from(tripsTable)
-    .where(eq(tripsTable.date, date));
+    .where(and(
+      eq(tripsTable.date, date),
+      sql`${tripsTable.status} != 'canceled'`,
+    ));
 
   res.json(trips.map(formatTrip));
 });
@@ -265,7 +278,7 @@ router.get("/driver/trips/today", requireAuth, requireRole("driver", "admin"), a
       .where(
         and(
           eq(bookingsTable.tripId, trip.id),
-          sql`${bookingsTable.status} != 'canceled'`
+          sql`${bookingsTable.status} NOT IN ('canceled', 'cancelled_by_admin')`
         )
       );
 
@@ -350,7 +363,7 @@ router.post("/driver/trips/:id/start", requireAuth, requireRole("driver", "admin
     .from(bookingsTable)
     .where(and(
       eq(bookingsTable.tripId, id),
-      sql`${bookingsTable.status} != 'canceled'`
+      sql`${bookingsTable.status} NOT IN ('canceled', 'cancelled_by_admin')`
     ));
 
   for (const booking of passengerBookings) {
@@ -378,7 +391,7 @@ router.get("/student/active-trip", requireAuth, async (req, res): Promise<void> 
     .where(
       and(
         eq(bookingsTable.userId, userId),
-        sql`${bookingsTable.status} != 'canceled'`
+        sql`${bookingsTable.status} NOT IN ('canceled', 'cancelled_by_admin')`
       )
     );
 
@@ -422,7 +435,7 @@ router.get("/student/active-trip", requireAuth, async (req, res): Promise<void> 
     .where(
       and(
         eq(bookingsTable.tripId, activeTrip.id),
-        sql`${bookingsTable.status} != 'canceled'`
+        sql`${bookingsTable.status} NOT IN ('canceled', 'cancelled_by_admin')`
       )
     );
 
@@ -467,7 +480,7 @@ router.get("/student/my-ride", requireAuth, async (req, res): Promise<void> => {
     .from(bookingsTable)
     .where(and(
       eq(bookingsTable.userId, userId),
-      sql`${bookingsTable.status} != 'canceled'`
+      sql`${bookingsTable.status} NOT IN ('canceled', 'cancelled_by_admin')`
     ));
 
   if (myBookings.length === 0) { res.json({ status: "none" }); return; }
@@ -576,7 +589,7 @@ router.get("/student/my-ride", requireAuth, async (req, res): Promise<void> => {
       .from(bookingsTable)
       .innerJoin(usersTable, eq(bookingsTable.userId, usersTable.id))
       .leftJoin(pickupPointsTable, eq(bookingsTable.pickupPointId, pickupPointsTable.id))
-      .where(and(eq(bookingsTable.tripId, activeTrip.id), sql`${bookingsTable.status} != 'canceled'`));
+      .where(and(eq(bookingsTable.tripId, activeTrip.id), sql`${bookingsTable.status} NOT IN ('canceled', 'cancelled_by_admin')`));
 
     passengers = raw.map(p => ({
       bookingId: p.bookingId,
@@ -627,7 +640,7 @@ router.post("/driver/trips/:id/cancel", requireAuth, requireRole("driver", "admi
   const affectedBookings = await db
     .select()
     .from(bookingsTable)
-    .where(and(eq(bookingsTable.tripId, id), sql`${bookingsTable.status} != 'canceled'`));
+    .where(and(eq(bookingsTable.tripId, id), sql`${bookingsTable.status} NOT IN ('canceled', 'cancelled_by_admin')`));
 
   if (affectedBookings.length > 0) {
     await db
@@ -707,9 +720,7 @@ router.delete("/admin/pickup-points/:id", requireAuth, requireRole("admin"), asy
 });
 
 function getTomorrow(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().split("T")[0];
+  return getJordanDateISO(1);
 }
 
 export default router;

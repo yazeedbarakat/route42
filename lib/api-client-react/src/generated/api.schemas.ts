@@ -185,6 +185,7 @@ export interface DashboardStats {
 
 export interface TripDemand {
   tripId: number;
+  date: string;
   departureTime: string;
   direction: string;
   bookingCount: number;

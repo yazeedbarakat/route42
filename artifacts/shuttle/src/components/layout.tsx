@@ -4,7 +4,7 @@ import { useGetNotifications } from "@workspace/api-client-react";
 import { 
   LayoutDashboard, CalendarPlus, History, Map, Bus,
   BookOpen, Truck, Bell, LogOut, 
-  ChevronRight, Menu, X, UsersRound, MapPin, CalendarClock, UserCog
+  ChevronRight, Menu, X, UsersRound, MapPin, CalendarClock, UserCog, Users
 } from "lucide-react";
 import { useState } from "react";
 import { LoadingScreen } from "@/components/loading-screen";
@@ -23,6 +23,7 @@ const NAV_LINKS = {
     { href: "/admin/drivers", label: "Driver Management", icon: UsersRound },
     { href: "/admin/terminals", label: "Pickup Terminals", icon: MapPin },
     { href: "/admin/schedule", label: "Schedule Manager", icon: CalendarClock },
+    { href: "/admin/students", label: "Students", icon: Users },
   ],
   driver: [
     { href: "/driver", label: "My Trips", icon: Truck },

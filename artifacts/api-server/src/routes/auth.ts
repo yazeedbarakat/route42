@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, bookingsTable, notificationsTable } from "@workspace/db";
 import { eq, or, and } from "drizzle-orm";
 import { RegisterBody, DriverLoginBody, AddDriverBody } from "@workspace/api-zod";
 import { signToken, signTempToken, verifyTempToken, requireAuth, requireRole } from "../lib/auth";
@@ -604,5 +604,110 @@ router.patch("/student/profile", requireAuth, async (req, res): Promise<void> =>
     createdAt:      updated.createdAt.toISOString(),
   });
 });
+
+// ─── Admin: list all students ─────────────────────────────────────────────────
+router.get(
+  "/admin/students",
+  requireAuth,
+  requireRole("admin"),
+  async (_req, res): Promise<void> => {
+    const students = await db
+      .select({
+        id:        usersTable.id,
+        name:      usersTable.name,
+        email:     usersTable.email,
+        username:  usersTable.username,
+        createdAt: usersTable.createdAt,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.role, "student"));
+
+    res.json(students.map(s => ({ ...s, createdAt: s.createdAt.toISOString() })));
+  },
+);
+
+// ─── Admin: add a new student account ────────────────────────────────────────
+const AddStudentBody = z.object({
+  name:     z.string().min(1).max(100),
+  email:    z.string().email(),
+  password: z.string().min(6).max(128),
+});
+
+router.post(
+  "/admin/students",
+  requireAuth,
+  requireRole("admin"),
+  async (req, res): Promise<void> => {
+    const parsed = AddStudentBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Name, a valid email, and a password (min 6 chars) are required." });
+      return;
+    }
+
+    const { name, email, password } = parsed.data;
+
+    const [existing] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.email, email));
+
+    if (existing) {
+      res.status(400).json({ error: "A user with this email already exists." });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const [student] = await db
+      .insert(usersTable)
+      .values({ name, email, passwordHash, role: "student", profileComplete: true })
+      .returning();
+
+    res.status(201).json({
+      id:        student.id,
+      name:      student.name,
+      email:     student.email,
+      username:  student.username ?? null,
+      createdAt: student.createdAt.toISOString(),
+    });
+  },
+);
+
+// ─── Admin: delete a student (cascade bookings + notifications) ───────────────
+router.delete(
+  "/admin/students/:id",
+  requireAuth,
+  requireRole("admin"),
+  async (req, res): Promise<void> => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: "Invalid student ID." });
+      return;
+    }
+
+    const [student] = await db
+      .select({ id: usersTable.id, role: usersTable.role, name: usersTable.name })
+      .from(usersTable)
+      .where(eq(usersTable.id, id));
+
+    if (!student) {
+      res.status(404).json({ error: "Student not found." });
+      return;
+    }
+
+    if (student.role !== "student") {
+      res.status(403).json({ error: "Only student accounts can be deleted through this endpoint." });
+      return;
+    }
+
+    await db.transaction(async (tx) => {
+      await tx.delete(bookingsTable).where(eq(bookingsTable.userId, id));
+      await tx.delete(notificationsTable).where(eq(notificationsTable.userId, id));
+      await tx.delete(usersTable).where(eq(usersTable.id, id));
+    });
+
+    res.json({ success: true });
+  },
+);
 
 export default router;

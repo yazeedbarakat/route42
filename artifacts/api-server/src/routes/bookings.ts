@@ -305,7 +305,7 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
     .from(bookingsTable)
     .where(and(eq(bookingsTable.userId, req.user!.userId), eq(bookingsTable.tripId, tripId)));
 
-  if (existing && existing.status !== "canceled") {
+  if (existing && existing.status !== "canceled" && existing.status !== "cancelled_by_admin") {
     res.status(400).json({ error: "You already have a booking for this trip" });
     return;
   }
@@ -319,7 +319,7 @@ router.post("/bookings", requireAuth, async (req, res): Promise<void> => {
         eq(bookingsTable.userId, req.user!.userId),
         eq(tripsTable.date, trip.date),
         eq(tripsTable.direction, trip.direction),
-        ne(bookingsTable.status, "canceled"),
+        sql`${bookingsTable.status} NOT IN ('canceled', 'cancelled_by_admin')`,
       ),
     );
 

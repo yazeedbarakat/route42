@@ -721,6 +721,8 @@ components:
       properties:
         tripId:
           type: integer
+        date:
+          type: string
         departureTime:
           type: string
         direction:
@@ -737,6 +739,7 @@ components:
           type: string
       required:
         - tripId
+        - date
         - departureTime
         - direction
         - bookingCount

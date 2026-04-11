@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, timeSlotsTable, usersTable, notificationsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { db, timeSlotsTable, tripsTable, bookingsTable, usersTable, notificationsTable } from "@workspace/db";
+import { eq, and, sql } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -39,6 +39,82 @@ function isAllowedJordanDate(date: string): boolean {
   return date === today || date === tomorrow;
 }
 
+// Timeslot direction → trip direction
+function toTripDirection(slotDir: "inbound" | "outbound"): "to_school" | "from_school" {
+  return slotDir === "inbound" ? "to_school" : "from_school";
+}
+
+// ─── Default schedule (matches trips.ts DEFAULT_SCHEDULE) ─────────────────────
+const DEFAULT_TIMESLOT_SCHEDULE: { timeString: string; direction: "inbound" | "outbound" }[] = [
+  { timeString: "08:00 AM", direction: "inbound"  },
+  { timeString: "10:00 AM", direction: "inbound"  },
+  { timeString: "12:00 PM", direction: "inbound"  },
+  { timeString: "01:00 PM", direction: "outbound" },
+  { timeString: "02:00 PM", direction: "inbound"  },
+  { timeString: "03:00 PM", direction: "outbound" },
+  { timeString: "04:00 PM", direction: "inbound"  },
+  { timeString: "05:00 PM", direction: "outbound" },
+  { timeString: "06:00 PM", direction: "inbound"  },
+  { timeString: "07:00 PM", direction: "outbound" },
+];
+
+/**
+ * Lazy-seed default timeslots (and their backing trips) for `date` if none exist yet.
+ * Safe to call on every request — exits immediately when rows are already present.
+ * Uses Asia/Amman as the source of truth for what constitutes today/tomorrow.
+ */
+async function seedTimeSlotsForDate(date: string): Promise<void> {
+  // Guard: only seed for today or tomorrow (Jordan timezone)
+  if (!isAllowedJordanDate(date)) return;
+
+  // Check whether ANY timeslot row already exists for this date
+  const [existing] = await db
+    .select({ id: timeSlotsTable.id })
+    .from(timeSlotsTable)
+    .where(eq(timeSlotsTable.date, date))
+    .limit(1);
+
+  if (existing) return; // already seeded — nothing to do
+
+  // Insert default timeslot rows
+  await db.insert(timeSlotsTable).values(
+    DEFAULT_TIMESLOT_SCHEDULE.map(s => ({
+      timeString: s.timeString,
+      direction:  s.direction,
+      date,
+      isActive: true,
+    })),
+  );
+
+  // Ensure a matching trip row exists for each slot so students can actually book them.
+  // We insert only where no row for (date, time, direction) already exists.
+  for (const s of DEFAULT_TIMESLOT_SCHEDULE) {
+    const tripDirection = toTripDirection(s.direction);
+    const [existingTrip] = await db
+      .select({ id: tripsTable.id })
+      .from(tripsTable)
+      .where(
+        and(
+          eq(tripsTable.date, date),
+          eq(tripsTable.departureTime, s.timeString),
+          eq(tripsTable.direction, tripDirection),
+        ),
+      );
+
+    if (!existingTrip) {
+      await db.insert(tripsTable).values({
+        date,
+        departureTime:        s.timeString,
+        direction:            tripDirection,
+        status:               "pending",
+        totalSeats:           15,
+        bookedSeats:          0,
+        minBookingsToConfirm: 5,
+      });
+    }
+  }
+}
+
 async function broadcastScheduleNotification(): Promise<void> {
   const students = await db
     .select({ id: usersTable.id })
@@ -59,6 +135,12 @@ async function broadcastScheduleNotification(): Promise<void> {
 
 router.get("/timeslots", requireAuth, async (req, res): Promise<void> => {
   const { date, direction } = req.query as Record<string, string | undefined>;
+
+  // Auto-seed default timeslots (and backing trips) for the requested date if none exist yet.
+  // Only fires for valid today/tomorrow dates (Jordan timezone); exits instantly if rows exist.
+  if (date && isValidDate(date)) {
+    await seedTimeSlotsForDate(date);
+  }
 
   let query = db.select().from(timeSlotsTable).$dynamic();
 
@@ -135,6 +217,38 @@ router.post("/admin/timeslots", requireAuth, requireRole("admin"), async (req, r
     .values({ timeString, direction, date, isActive: true })
     .returning();
 
+  // ── Bug 1 fix: ensure a matching trip exists so students can book it ──────
+  const tripDirection = toTripDirection(direction);
+  const [existingTrip] = await db
+    .select()
+    .from(tripsTable)
+    .where(
+      and(
+        eq(tripsTable.date, date),
+        eq(tripsTable.departureTime, timeString),
+        eq(tripsTable.direction, tripDirection),
+      ),
+    );
+
+  if (!existingTrip) {
+    await db.insert(tripsTable).values({
+      date,
+      departureTime: timeString,
+      direction: tripDirection,
+      status: "pending",
+      totalSeats: 15,
+      bookedSeats: 0,
+      minBookingsToConfirm: 5,
+    });
+  } else if (existingTrip.status === "canceled") {
+    // Reactivate a previously-canceled trip for this slot
+    await db
+      .update(tripsTable)
+      .set({ status: "pending" })
+      .where(eq(tripsTable.id, existingTrip.id));
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   await broadcastScheduleNotification().catch(() => {});
 
   res.status(201).json({
@@ -156,19 +270,78 @@ router.delete("/admin/timeslots/:id", requireAuth, requireRole("admin"), async (
     return;
   }
 
-  const [deleted] = await db
-    .delete(timeSlotsTable)
-    .where(eq(timeSlotsTable.id, id))
-    .returning();
-
-  if (!deleted) {
+  const [slot] = await db.select().from(timeSlotsTable).where(eq(timeSlotsTable.id, id));
+  if (!slot) {
     res.status(404).json({ error: "Time slot not found." });
     return;
   }
 
+  // ── Bug 2 fix: cancel orphaned bookings before deleting the slot ──────────
+  const tripDirection = toTripDirection(slot.direction as "inbound" | "outbound");
+
+  const [linkedTrip] = await db
+    .select()
+    .from(tripsTable)
+    .where(
+      and(
+        eq(tripsTable.date, slot.date),
+        eq(tripsTable.departureTime, slot.timeString),
+        eq(tripsTable.direction, tripDirection),
+      ),
+    );
+
+  await db.transaction(async (tx) => {
+    if (linkedTrip) {
+      // Only target bookings that are still active (not already cancelled)
+      const activeBookings = await tx
+        .select()
+        .from(bookingsTable)
+        .where(
+          and(
+            eq(bookingsTable.tripId, linkedTrip.id),
+            sql`${bookingsTable.status} NOT IN ('canceled', 'cancelled_by_admin')`,
+          ),
+        );
+
+      if (activeBookings.length > 0) {
+        // Cancel only the active bookings — do not touch already-cancelled ones
+        await tx
+          .update(bookingsTable)
+          .set({ status: "cancelled_by_admin" })
+          .where(
+            and(
+              eq(bookingsTable.tripId, linkedTrip.id),
+              sql`${bookingsTable.status} NOT IN ('canceled', 'cancelled_by_admin')`,
+            ),
+          );
+
+        // Notify every affected student with a personalised message
+        const displayTime = slot.timeString;
+        await tx.insert(notificationsTable).values(
+          activeBookings.map(b => ({
+            userId: b.userId,
+            message: `Your scheduled ride at ${displayTime} on ${slot.date} has been cancelled by the administration. Please book a new time slot.`,
+            type: "trip_canceled",
+            isRead: false,
+          })),
+        );
+      }
+
+      // Mark the trip itself as canceled and reset seat count
+      await tx
+        .update(tripsTable)
+        .set({ status: "canceled", bookedSeats: 0 })
+        .where(eq(tripsTable.id, linkedTrip.id));
+    }
+
+    // Delete the timeslot inside the transaction so everything rolls back on failure
+    await tx.delete(timeSlotsTable).where(eq(timeSlotsTable.id, id));
+  });
+  // ─────────────────────────────────────────────────────────────────────────
+
   await broadcastScheduleNotification().catch(() => {});
 
-  res.json({ success: true, id: deleted.id });
+  res.json({ success: true, id });
 });
 
 export default router;

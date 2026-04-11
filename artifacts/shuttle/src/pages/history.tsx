@@ -17,6 +17,16 @@ function StatusBadge({ status }: { status: string }) {
       <AlertCircle size={11} />Pending
     </span>
   );
+  if (status === "waiting") return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-400/10 text-blue-400 border border-blue-400/20">
+      <AlertCircle size={11} />Waitlisted
+    </span>
+  );
+  if (status === "cancelled_by_admin") return (
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-orange-400/10 text-orange-400 border border-orange-400/20">
+      <XCircle size={11} />Cancelled by Admin
+    </span>
+  );
   return (
     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-400/10 text-red-400 border border-red-400/20">
       <XCircle size={11} />Cancelled

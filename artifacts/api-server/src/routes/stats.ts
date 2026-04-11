@@ -1,19 +1,29 @@
 import { Router, type IRouter } from "express";
 import { db, tripsTable, bookingsTable, usersTable } from "@workspace/db";
-import { eq, and, sql, count, sum } from "drizzle-orm";
+import { eq, and, sql, count, inArray } from "drizzle-orm";
 import { requireAuth, requireRole } from "../lib/auth";
 import { GetTripDemandQueryParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
+function getDateInAmman(offsetDays = 0): string {
+  const now = new Date();
+  const ammanStr = now.toLocaleString("en-CA", { timeZone: "Asia/Amman" });
+  const datePart = ammanStr.split(",")[0].trim();
+  if (offsetDays === 0) return datePart;
+  const [year, month, day] = datePart.split("-").map(Number);
+  const d = new Date(year, month - 1, day + offsetDays);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
 router.get("/stats/dashboard", requireAuth, requireRole("admin"), async (_req, res): Promise<void> => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   res.setHeader("Pragma", "no-cache");
 
-  const today = new Date().toISOString().split("T")[0];
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
-  const weekAgoStr = weekAgo.toISOString().split("T")[0];
+  const today = getDateInAmman(0);
 
   // 1. totalStudents
   const [totalStudentsResult] = await db
@@ -39,31 +49,7 @@ router.get("/stats/dashboard", requireAuth, requireRole("admin"), async (_req, r
     .from(tripsTable)
     .where(and(eq(tripsTable.date, today), eq(tripsTable.status, "confirmed")));
 
-  // 4. pendingTrips — trips with status = pending today
-  const [pendingTripsResult] = await db
-    .select({ count: count() })
-    .from(tripsTable)
-    .where(and(eq(tripsTable.date, today), eq(tripsTable.status, "pending")));
-
-  // 5. tripsThisWeek
-  const [thisWeekResult] = await db
-    .select({ count: count() })
-    .from(tripsTable)
-    .where(sql`${tripsTable.date} >= ${weekAgoStr} AND ${tripsTable.date} <= ${today}`);
-
-  // 6. avgOccupancy — (non-cancelled bookings today / total seats today) * 100
-  const [totalSeatsResult] = await db
-    .select({ totalSeats: sum(tripsTable.totalSeats) })
-    .from(tripsTable)
-    .where(eq(tripsTable.date, today));
-
-  const totalSeatsToday = Number(totalSeatsResult?.totalSeats ?? 0);
-  const bookingsToday = bookingsTodayResult?.count ?? 0;
-  const avgOccupancy = totalSeatsToday > 0
-    ? Math.round((bookingsToday / totalSeatsToday) * 100)
-    : 0;
-
-  // 7. peakTime — today's trip with the most non-cancelled bookings
+  // 4. peakTime — today's trip with the most non-cancelled bookings
   const todayTripsWithBookings = await db
     .select({
       departureTime: tripsTable.departureTime,
@@ -90,72 +76,73 @@ router.get("/stats/dashboard", requireAuth, requireRole("admin"), async (_req, r
     }
   }
 
-  // 8. efficiency — (bookedSeats / totalSeats) * 100 for confirmed trips today
-  const [confirmedSeats] = await db
-    .select({
-      bookedSeats: sum(tripsTable.bookedSeats),
-      totalSeats: sum(tripsTable.totalSeats),
-    })
-    .from(tripsTable)
-    .where(and(eq(tripsTable.date, today), eq(tripsTable.status, "confirmed")));
-
-  const filledSeats = Number(confirmedSeats?.bookedSeats ?? 0);
-  const confirmedCapacity = Number(confirmedSeats?.totalSeats ?? 0);
-  const efficiency = confirmedCapacity > 0
-    ? Math.round((filledSeats / confirmedCapacity) * 100)
-    : 0;
-
   res.json({
     totalStudents: totalStudentsResult?.count ?? 0,
-    bookingsToday,
+    bookingsToday: bookingsTodayResult?.count ?? 0,
     confirmedTrips: confirmedTripsResult?.count ?? 0,
-    pendingTrips: pendingTripsResult?.count ?? 0,
-    tripsThisWeek: thisWeekResult?.count ?? 0,
-    avgOccupancy,
     peakTime,
-    efficiency,
   });
 });
 
 router.get("/stats/demand", requireAuth, requireRole("admin"), async (req, res): Promise<void> => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   res.setHeader("Pragma", "no-cache");
+
   const parsed = GetTripDemandQueryParams.safeParse(req.query);
-  const date = parsed.success && parsed.data.date ? parsed.data.date : getTomorrow();
+  const today = getDateInAmman(0);
+  const tomorrow = getDateInAmman(1);
 
-  const trips = await db.select().from(tripsTable).where(eq(tripsTable.date, date));
+  const requestedDate = parsed.success && parsed.data.date ? parsed.data.date : null;
+  const datesToQuery = requestedDate ? [requestedDate] : [today, tomorrow];
 
-  const result = [];
-  for (const trip of trips) {
-    const allBookings = await db
-      .select()
-      .from(bookingsTable)
-      .where(eq(bookingsTable.tripId, trip.id));
+  const trips = await db
+    .select()
+    .from(tripsTable)
+    .where(inArray(tripsTable.date, datesToQuery));
 
-    const confirmed = allBookings.filter(b => b.status === "confirmed").length;
-    const pending = allBookings.filter(b => b.status === "pending").length;
-    const total = allBookings.filter(b => b.status !== "canceled").length;
+  if (trips.length === 0) {
+    res.json([]);
+    return;
+  }
 
-    result.push({
+  const tripIds = trips.map(t => t.id);
+
+  const allBookings = await db
+    .select({
+      tripId: bookingsTable.tripId,
+      status: bookingsTable.status,
+    })
+    .from(bookingsTable)
+    .where(inArray(bookingsTable.tripId, tripIds));
+
+  const bookingMap = new Map<number, { confirmed: number; pending: number; total: number }>();
+  for (const b of allBookings) {
+    if (!bookingMap.has(b.tripId)) {
+      bookingMap.set(b.tripId, { confirmed: 0, pending: 0, total: 0 });
+    }
+    const entry = bookingMap.get(b.tripId)!;
+    if (b.status !== "canceled") entry.total++;
+    if (b.status === "confirmed") entry.confirmed++;
+    if (b.status === "pending") entry.pending++;
+  }
+
+  const result = trips.map(trip => {
+    const counts = bookingMap.get(trip.id) ?? { confirmed: 0, pending: 0, total: 0 };
+    return {
       tripId: trip.id,
+      date: trip.date,
       departureTime: trip.departureTime,
       direction: trip.direction,
-      bookingCount: total,
-      confirmedCount: confirmed,
-      pendingCount: pending,
+      bookingCount: counts.total,
+      confirmedCount: counts.confirmed,
+      pendingCount: counts.pending,
       availableSeats: trip.totalSeats - trip.bookedSeats,
       status: trip.status,
-    });
-  }
+    };
+  });
 
   res.json(result);
 });
-
-function getTomorrow(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().split("T")[0];
-}
 
 function formatTime(hhmm: string): string {
   const [hStr, mStr] = hhmm.split(":");
