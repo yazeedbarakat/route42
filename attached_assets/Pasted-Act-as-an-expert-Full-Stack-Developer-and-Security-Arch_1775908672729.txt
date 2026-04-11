@@ -1,0 +1,36 @@
+Act as an expert Full-Stack Developer and Security Architect. I need to overhaul the Authentication system (Register/Login) in my "Smart Shuttle Solution" project to implement Domain-Restricted Google OAuth, custom credentials, and automated database seeding for testing.
+
+**Context:**
+The system has 3 roles: Student, Admin, and Driver. Do NOT alter or break the existing Driver login logic.
+
+Please implement the following Authentication Workflow:
+
+**Task 1: Student Registration (Google OAuth & Domain Restriction)**
+* Implement a "Continue with Google" button for registration.
+* **Strict Domain Check:** During the Google OAuth callback, verify the user's email. If `!email.endsWith('@learner.42.tech')`, reject the sign-in and return a clear error: "Unauthorized Domain. Please use your 42 email."
+* **Two-Step Registration:** If a student signs in with a valid 42 Google account for the *first time*, redirect them to a `/complete-profile` setup page.
+* **Profile Completion:** On this page, require the student to enter: Full Name, Phone Number, and a Custom Password (hash this with bcrypt before saving). Once saved, mark the user as a fully registered 'student' and log them in.
+
+**Task 2: Student & Test Accounts Login (Dual Method)**
+* Update the Student Login UI. Provide two options:
+  1. "Login with Google" (enforcing the `@learner.42.tech` check).
+  2. A traditional form. Change the input from `type="email"` to `type="text"` (placeholder: "Email or Username") to support both real students and mock test accounts.
+* In the backend logic, find the user by EITHER `email` OR `username`. Check the hashed password to log them in.
+
+**Task 3: Admin Login Logic**
+* The Admin login must use the traditional form. 
+* If `username === 'admin'` and the password matches the hashed admin password in the DB, log them in and grant the 'admin' role.
+
+**Task 4: Preserve Driver Logic**
+* Leave the Driver login flow, UI, and database checks EXACTLY as they are. Do not refactor the driver auth logic.
+
+**Task 5: Database Seeding (Mock Student Accounts)**
+* Create a simple seeding script or a temporary development endpoint (e.g., `GET /api/dev/seed-students`) to insert 6 mock students for fast UI testing.
+* Credentials must be: 
+  - Username: `s1`, Password: `s1` (up through `s6` / `s6`).
+* **Crucial:** Hash these simple passwords using `bcrypt` before saving so the standard auth login check works. Assign them `role: 'student'`.
+
+**Implementation Details:**
+* If using NextAuth.js (Auth.js), update `[...nextauth].js/ts` to include both the `GoogleProvider` (with profile callbacks) and a unified `CredentialsProvider` that handles Email/Username + Password logic for Students, Admins, and Test accounts.
+* Provide the updated Auth config file, the Student Login/Register UI components, the `/complete-profile` logic, and the seeding script.
+* Keep the "42 Intranet V2" dark theme styling for all forms.
