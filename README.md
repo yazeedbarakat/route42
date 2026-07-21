@@ -71,6 +71,73 @@ route42 makes it easy for 42 Irbid students to book shuttle rides to and from ca
 
 ---
 
+## Running Locally
+
+This is a pnpm workspace monorepo (Node.js, TypeScript, Express API + Vite frontend, PostgreSQL/Drizzle).
+
+### 1. Install dependencies
+
+```bash
+pnpm install
+```
+
+### 2. Database
+
+Needs a PostgreSQL database. If you don't already have one running, you can
+spin up a standalone instance owned by your own user (no root/sudo needed):
+
+```bash
+mkdir -p ~/.local/share/route42-pgdata
+initdb -D ~/.local/share/route42-pgdata -U "$USER" -A trust
+pg_ctl -D ~/.local/share/route42-pgdata -l ~/.local/share/route42-pgdata/logfile -o "-p 5433 -k /tmp" start
+psql -h /tmp -p 5433 -U "$USER" -d postgres -c "CREATE DATABASE route42;"
+```
+
+(Only run `initdb` once — after that, just `pg_ctl ... start` to bring it back up.)
+
+### 3. Environment variables
+
+Create `.env.local` in the repo root:
+
+```bash
+DATABASE_URL=postgresql://YOUR_USER@localhost:5433/route42?host=/tmp
+SESSION_SECRET=some-local-dev-secret
+PORT=8080
+NODE_ENV=development
+```
+
+Google OAuth login (`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`) is
+configured in the Railway deployment's secrets, not in the repo, so it
+won't work out of the box locally. Email/username+password and driver
+login work fine without it. See `replit.md` for demo credentials.
+
+### 4. Run
+
+Push the DB schema, build, and start the API server (port 8080):
+
+```bash
+set -a; source .env.local; set +a
+pnpm --filter @workspace/api-server run dev
+```
+
+In a second terminal, start the frontend (Vite dev server, proxies `/api` to the API server):
+
+```bash
+cd artifacts/shuttle
+PORT=5000 BASE_PATH=/ pnpm run dev
+```
+
+Open **http://localhost:5000**.
+
+### Stop
+
+```bash
+lsof -ti:5000,8080 -sTCP:LISTEN | xargs -r kill
+pg_ctl -D ~/.local/share/route42-pgdata stop
+```
+
+---
+
 ## Built by
 
 [entrape](https://github.com/entrape), [rsn026](https://github.com/rsn026), [yazeedbarakat](https://github.com/yazeedbarakat) — for 42 Irbid
